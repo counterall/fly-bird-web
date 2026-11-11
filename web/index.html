@@ -3,13 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#2b2560">
+  <meta name="theme-color" content="#1a1640">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="description" content="Updraft: a one-button game. Flap a magpie through gaps between dusk-lit pillars.">
   <title>Updraft</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%235b3f86'/%3E%3Cpath d='M5 18 Q9 15 13 16 L23 15 Q27 12 29 15 L24 17 Q19 21 12 20 Z' fill='%2317161d'/%3E%3Cellipse cx='16' cy='18.5' rx='4' ry='1.8' fill='%23f7f2ea'/%3E%3C/svg%3E">
   <style>
+    /* html gets a background too, so no white shows under mobile browser toolbars */
+    html { background: #1a1640; }
     html, body { margin: 0; height: 100%; }
     body {
       background: radial-gradient(ellipse at 50% 30%, #3a2f6e, #16122e 70%);
@@ -21,7 +23,8 @@
       display: block; border-radius: 14px; outline: none;
       box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 16px 48px rgba(0, 0, 0, 0.45);
     }
-    @media (max-width: 499px) { canvas { border-radius: 0; box-shadow: none; } }
+    body.fill { background: #1a1640; }
+    body.fill canvas { border-radius: 0; box-shadow: none; }
     noscript { color: #fff8ee; font: 16px system-ui, sans-serif; }
   </style>
 </head>

@@ -23,7 +23,7 @@ export const CFG = Object.freeze({
 })
 
 export function createGame() {
-  return { mode: 'ready', t: 0, y: H * 0.42, vy: 0, pillars: [], score: 0, scroll: 0, overAt: 0, flapAt: -1 }
+  return { mode: 'ready', t: 0, y: H * 0.42, vy: 0, pillars: [], score: 0, scroll: 0, overAt: 0, flapAt: -1, ceil: 0 }
 }
 
 export const speedFor = score => CFG.speed + Math.min(score * CFG.speedPerPoint, CFG.speedCap)
@@ -80,7 +80,8 @@ export function step(g, dt, rand = Math.random) {
   // Gravity applies while playing and while the wreck falls after a crash.
   g.vy = Math.min(g.vy + CFG.gravity * dt, CFG.maxFall)
   g.y += g.vy * dt
-  if (g.y - CFG.birdR < 0) { g.y = CFG.birdR; g.vy = 0 }
+  // ceiling: top of the visible sky (negative when a tall screen shows extra sky)
+  if (g.y - CFG.birdR < g.ceil) { g.y = g.ceil + CFG.birdR; g.vy = 0 }
 
   if (g.mode === 'over') {
     if (g.y + CFG.birdR > GROUND) { g.y = GROUND - CFG.birdR; g.vy = 0 }

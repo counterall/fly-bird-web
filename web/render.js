@@ -4,6 +4,7 @@ import { CFG, GROUND, H, W } from './game.js'
 
 // ── palette ────────────────────────────────────────────────────────────────
 const SKY = ['#2b2560', '#5b3f86', '#c4627a', '#f4a76a']
+const SKY_NIGHT = '#1a1640' // top of the extra sky on tall screens
 const HILL_FAR = '#6a4a86'
 const HILL_NEAR = '#3d3268'
 // Pillars: dusk-lit plum stone, rim-lit on the sun side (right) in peach.
@@ -221,11 +222,43 @@ function card(c, x, y, w, h) {
 
 const GOLD = '#ffd6a0'
 
-export function render(c, g, best, paused, touch) {
-  const sky = c.createLinearGradient(0, 0, 0, GROUND)
-  SKY.forEach((col, i) => sky.addColorStop(i / (SKY.length - 1), col))
+// Faint stars for the extra sky a tall screen shows above the playfield.
+const STARS = Array.from({ length: 40 }, (_, i) => ({
+  x: (i * 97.3) % W,
+  y: 110 - ((i * 61.7) % 420),
+  r: 0.6 + ((i * 7) % 5) * 0.18,
+  phase: i * 1.7,
+}))
+
+function drawStars(c, top, t) {
+  for (const s of STARS) {
+    if (s.y < -top) continue
+    // fade out towards the warmer part of the sky
+    const fade = Math.max(0, Math.min(1, (120 - s.y) / 160))
+    c.globalAlpha = fade * (0.45 + 0.25 * Math.sin(t * 1.3 + s.phase))
+    c.fillStyle = '#fff4e6'
+    c.beginPath()
+    c.arc(s.x, s.y, s.r, 0, Math.PI * 2)
+    c.fill()
+  }
+  c.globalAlpha = 1
+}
+
+/**
+ * Draw one frame. `view.top` / `view.bottom` are extra logical pixels shown
+ * above y = 0 and below y = H on screens taller than 2:3 (phones); the
+ * playfield itself is unchanged, the sky and ground just extend.
+ */
+export function render(c, g, best, paused, touch, view = { top: 0, bottom: 0 }) {
+  const top = view.top
+  const bottom = H + view.bottom
+  const sky = c.createLinearGradient(0, -top, 0, GROUND)
+  const span = GROUND + top
+  sky.addColorStop(0, top > 0 ? SKY_NIGHT : SKY[0])
+  SKY.forEach((col, i) => sky.addColorStop((top + (i / (SKY.length - 1)) * GROUND) / span, col))
   c.fillStyle = sky
-  c.fillRect(0, 0, W, H)
+  c.fillRect(0, -top, W, bottom + top)
+  drawStars(c, top, g.t)
 
   // sun
   c.fillStyle = 'rgba(255, 214, 160, 0.9)'
@@ -238,15 +271,15 @@ export function render(c, g, best, paused, touch) {
   drawHills(c, g.scroll, 0.45, 4.2, 40, GROUND - 30, HILL_NEAR)
 
   for (const p of g.pillars) {
-    const top = p.gapY - p.gap / 2
-    const bottom = p.gapY + p.gap / 2
-    drawPillarPart(c, p.x, 0, top, true)
-    drawPillarPart(c, p.x, bottom, GROUND - bottom, false)
+    const gapTop = p.gapY - p.gap / 2
+    const gapBottom = p.gapY + p.gap / 2
+    drawPillarPart(c, p.x, -view.top, gapTop + view.top, true)
+    drawPillarPart(c, p.x, gapBottom, GROUND - gapBottom, false)
   }
 
   // ground
   c.fillStyle = GROUND_BODY
-  c.fillRect(0, GROUND, W, H - GROUND)
+  c.fillRect(0, GROUND, W, bottom - GROUND)
   c.fillStyle = GROUND_TOP
   c.fillRect(0, GROUND, W, 10)
   c.fillStyle = 'rgba(255,255,255,0.08)'
@@ -278,7 +311,7 @@ export function render(c, g, best, paused, touch) {
 
   if (paused) {
     c.fillStyle = 'rgba(20, 14, 40, 0.45)'
-    c.fillRect(0, 0, W, H)
+    c.fillRect(0, -top, W, bottom + top)
     text(c, 'Paused', W / 2, H / 2 - 16, 40)
     text(c, touch ? 'Tap to resume' : 'P or click to resume', W / 2, H / 2 + 22, 16)
   }

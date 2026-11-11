@@ -19,14 +19,34 @@ let paused = false
 let touch = matchMedia('(pointer: coarse)').matches
 let last = performance.now()
 
-// Fit the 2:3 playfield inside the window.
+// Extra logical sky above / ground below the 400×600 playfield, for screens
+// taller than 2:3. Gameplay happens in the same playfield on every device.
+const view = { top: 0, bottom: 0 }
+const SKY_SHARE = 0.7 // share of the extra height given to the sky
+
+// Portrait / tall windows (phones): fill the whole window edge to edge.
+// Wider windows: a framed 2:3 card centred on the page.
 function fit() {
-  const margin = innerWidth < 500 ? 0 : 24
-  const scale = Math.min((innerWidth - margin * 2) / W, (innerHeight - margin * 2) / H)
-  canvas.style.width = `${Math.floor(W * scale)}px`
-  canvas.style.height = `${Math.floor(H * scale)}px`
+  const vw = document.documentElement.clientWidth
+  const vh = document.body.clientHeight // 100dvh: follows mobile browser toolbars
+  const fill = vh / vw >= H / W
+  document.body.classList.toggle('fill', fill)
+  if (fill) {
+    const extra = vh * (W / vw) - H
+    view.top = Math.round(extra * SKY_SHARE)
+    view.bottom = extra - view.top
+    canvas.style.width = `${vw}px`
+    canvas.style.height = `${vh}px`
+  } else {
+    view.top = view.bottom = 0
+    const margin = 24
+    const scale = Math.min((vw - margin * 2) / W, (vh - margin * 2) / H)
+    canvas.style.width = `${Math.floor(W * scale)}px`
+    canvas.style.height = `${Math.floor(H * scale)}px`
+  }
 }
 addEventListener('resize', fit)
+visualViewport?.addEventListener('resize', fit)
 fit()
 
 function press() {
@@ -43,6 +63,7 @@ function togglePause() {
 function frame(now) {
   const dt = (now - last) / 1000
   last = now
+  g.ceil = -view.top
   if (!paused) {
     const was = g.mode
     step(g, dt)
@@ -55,8 +76,10 @@ function frame(now) {
   const pw = Math.round(canvas.clientWidth * dpr)
   const ph = Math.round(canvas.clientHeight * dpr)
   if (canvas.width !== pw || canvas.height !== ph) { canvas.width = pw; canvas.height = ph }
-  c.setTransform(pw / W, 0, 0, ph / H, 0, 0)
-  render(c, g, best, paused, touch)
+  const sx = pw / W
+  const sy = ph / (H + view.top + view.bottom)
+  c.setTransform(sx, 0, 0, sy, 0, view.top * sy)
+  render(c, g, best, paused, touch, view)
   requestAnimationFrame(frame)
 }
 requestAnimationFrame(frame)
