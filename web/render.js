@@ -97,20 +97,20 @@ function drawMagpie(c, g) {
   c.scale(1.3, 1.3) // drawn in a ~30px unit box; scaled up for readability
   c.lineJoin = 'round'
 
-  // long graduated tail
+  // short tail: the body ends at x = -14; the tail tip sits at -21
   c.fillStyle = MAG_BLACK
   c.beginPath()
   c.moveTo(-8, -2)
-  c.lineTo(-36, -2)
-  c.quadraticCurveTo(-42, 1, -36, 5)
+  c.lineTo(-18, -2)
+  c.quadraticCurveTo(-24, 1.5, -18, 5)
   c.lineTo(-8, 5)
   c.closePath()
   c.fill()
   c.strokeStyle = MAG_SHEEN_TAIL
   c.lineWidth = 1.6
   c.beginPath()
-  c.moveTo(-12, 1)
-  c.lineTo(-36, 1.5)
+  c.moveTo(-13, 1.5)
+  c.lineTo(-19, 1.5)
   c.stroke()
 
   // far wing (behind body), mirrored and darker
