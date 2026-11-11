@@ -14,7 +14,9 @@ There is no build step and there are no runtime dependencies. `web/` is served a
 
 | File | Role |
 |---|---|
-| `web/index.html` | Page shell: the full-window canvas, page styles and the favicon. |
+| `web/index.html` | Page shell: the full-window canvas, page styles, and the icon and manifest links. |
+| `web/*.png`, `web/manifest.webmanifest` | Home-screen icons (iOS uses `apple-touch-icon.png`, and ignores SVG) and the web app manifest. The PNGs are generated: see Notes. |
+| `tools/icons.html` | Icon generator: draws each icon with `drawIcon()` from `web/render.js`. |
 | `web/main.js` | Entry point: fits the 2:3 playfield to the window, runs the rAF loop, handles input, saves the best score. |
 | `web/render.js` | Canvas renderer: sky, parallax hills, pillars, the magpie (with wing-beat animation), and the overlays. Colours are at the top. |
 | `web/game.js` | Pure game model (physics, pillars, scoring, collisions) on a fixed 400×600 logical field. No DOM. Tuning lives in `CFG`. |
@@ -33,4 +35,5 @@ npm start    # serve web/ at http://localhost:8080
 - Files must be served over HTTP, because ES modules don't load from `file://`.
 - The renderer draws in logical units: `main.js` sets the transform to scale 400×600 to the canvas's device pixels.
 - Visual sizes, like the magpie's `c.scale(1.3)`, are independent of the collision radius `CFG.birdR`. Only the body collides, not the tail.
+- **Icons:** after changing `drawIcon()` or the magpie, regenerate the PNGs. Run `python3 -m http.server` in the repo root, open `/tools/icons.html`, and save each PNG into `web/`. Keep the icons full-bleed with no transparency, because iOS rounds the corners itself.
 - GitHub Pages must be set to **Source: GitHub Actions** in the repo settings, under Pages.

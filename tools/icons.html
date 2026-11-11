@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- Icon generator: serve the repo root (python3 -m http.server) and open
+     /tools/icons.html. Each icon is drawn by drawIcon() in web/render.js;
+     click a link to save the PNG into web/. -->
+<meta charset="utf-8">
+<title>Updraft icons</title>
+<style>
+  body { font: 14px system-ui, sans-serif; background: #222; color: #eee; padding: 16px; }
+  figure { display: inline-block; margin: 0 16px 16px 0; vertical-align: top; }
+  canvas { display: block; max-width: 256px; height: auto; border-radius: 22%; }
+  a { color: #ffd6a0; }
+</style>
+<div id="out"></div>
+<script type="module">
+  import { drawIcon } from '../web/render.js'
+  const ICONS = [
+    ['apple-touch-icon.png', 180, false],
+    ['icon-192.png', 192, false],
+    ['icon-512.png', 512, false],
+    ['icon-maskable-512.png', 512, true],
+  ]
+  const out = document.getElementById('out')
+  for (const [name, size, safe] of ICONS) {
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = size
+    canvas.dataset.name = name
+    drawIcon(canvas.getContext('2d'), size, safe)
+    const fig = document.createElement('figure')
+    const link = Object.assign(document.createElement('a'), { href: canvas.toDataURL('image/png'), download: name, textContent: `${name} (${size}px)` })
+    fig.append(canvas, link)
+    out.append(fig)
+  }
+</script>

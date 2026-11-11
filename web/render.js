@@ -92,10 +92,16 @@ function wingAngle(g) {
 
 function drawMagpie(c, g) {
   const tilt = g.mode === 'ready' ? Math.sin(g.t * 3) * 0.06 : Math.max(-0.45, Math.min(1.2, g.vy / 600))
+  // drawn in a ~45px unit box; scaled up 1.3× for readability
+  paintMagpie(c, CFG.birdX, g.y, tilt, 1.3, wingAngle(g), g.mode === 'over')
+}
+
+/** The magpie at (x, y), facing right. `wing` > 0 raises the wing tip. */
+function paintMagpie(c, x, y, tilt, scale, wing, dead) {
   c.save()
-  c.translate(CFG.birdX, g.y)
+  c.translate(x, y)
   c.rotate(tilt)
-  c.scale(1.3, 1.3) // drawn in a ~30px unit box; scaled up for readability
+  c.scale(scale, scale)
   c.lineJoin = 'round'
 
   // short tail: the body ends at x = -14; the tail tip sits at -21
@@ -115,7 +121,7 @@ function drawMagpie(c, g) {
   c.stroke()
 
   // far wing (behind body), mirrored and darker
-  drawWing(c, -wingAngle(g) * 0.6, true)
+  drawWing(c, -wing * 0.6, true)
 
   // body
   c.fillStyle = MAG_BLACK
@@ -142,7 +148,7 @@ function drawMagpie(c, g) {
   c.closePath()
   c.fill()
   // eye
-  if (g.mode === 'over') {
+  if (dead) {
     c.strokeStyle = MAG_WHITE
     c.lineWidth = 1.3
     c.beginPath()
@@ -168,7 +174,48 @@ function drawMagpie(c, g) {
   c.stroke()
 
   // near wing (in front of body)
-  drawWing(c, wingAngle(g), false)
+  drawWing(c, wing, false)
+  c.restore()
+}
+
+/**
+ * App icon: square, full-bleed (iOS rounds the corners itself), drawn in a
+ * 100×100 box scaled to `size`. `safe` shrinks the subject into the centre
+ * for Android "maskable" icons, which may be cropped to a circle.
+ */
+export function drawIcon(c, size, safe = false) {
+  c.save()
+  c.scale(size / 100, size / 100)
+  const sky = c.createLinearGradient(0, 0, 0, 100)
+  sky.addColorStop(0, SKY_NIGHT)
+  sky.addColorStop(0.35, SKY[1])
+  sky.addColorStop(0.72, SKY[2])
+  sky.addColorStop(1, SKY[3])
+  c.fillStyle = sky
+  c.fillRect(0, 0, 100, 100)
+  const k = safe ? 0.78 : 1 // keep the subject inside the maskable safe zone
+  c.translate(50 * (1 - k), 50 * (1 - k))
+  c.scale(k, k)
+  // stars
+  c.fillStyle = 'rgba(255, 244, 230, 0.7)'
+  for (const [sx, sy, r] of [[14, 12, 0.9], [30, 7, 0.6], [78, 10, 0.8], [88, 24, 0.6], [9, 30, 0.6]]) {
+    c.beginPath(); c.arc(sx, sy, r, 0, Math.PI * 2); c.fill()
+  }
+  // sun and hills
+  c.fillStyle = 'rgba(255, 214, 160, 0.95)'
+  c.beginPath(); c.arc(72, 74, 17, 0, Math.PI * 2); c.fill()
+  c.fillStyle = HILL_FAR
+  c.beginPath()
+  c.moveTo(-20, 120); c.lineTo(-20, 84)
+  c.quadraticCurveTo(20, 68, 48, 86); c.quadraticCurveTo(80, 72, 120, 82)
+  c.lineTo(120, 120); c.closePath(); c.fill()
+  c.fillStyle = HILL_NEAR
+  c.beginPath()
+  c.moveTo(-20, 120); c.lineTo(-20, 96)
+  c.quadraticCurveTo(30, 84, 62, 96); c.quadraticCurveTo(90, 88, 120, 94)
+  c.lineTo(120, 120); c.closePath(); c.fill()
+  // the magpie, mid wing-beat, climbing
+  paintMagpie(c, 52, 48, -0.2, 1.6, -0.7, false)
   c.restore()
 }
 
