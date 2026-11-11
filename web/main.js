@@ -97,7 +97,7 @@ function frame(now) {
   const sx = pw / W
   const sy = ph / (H + view.top + view.bottom)
   c.setTransform(sx, 0, 0, sy, 0, view.top * sy)
-  render(c, g, best, paused, touch, view)
+  render(c, g, { best, paused, touch }, view)
   requestAnimationFrame(frame)
 }
 requestAnimationFrame(frame)

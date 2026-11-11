@@ -3,6 +3,7 @@
 A one-button browser game: flap a magpie through gaps between dusk-lit pillars.
 
 - **Controls:** Space / ↑ / W / click / tap to flap, and P / Esc to pause.
+- **Medals:** bronze at 10 points, silver at 25, gold at 50. The sky turns from dusk to night as a run goes on.
 - **Run locally:** run `npm start`, then open http://localhost:8080.
 - **Tests:** `npm test`.
 

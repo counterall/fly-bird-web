@@ -4,7 +4,7 @@ Guidance for AI coding agents working in this repository.
 
 ## What this is
 
-**Updraft**: a one-button arcade game played in the browser as a static single-page app, published to GitHub Pages. You fly a magpie through gaps between dusk-lit stone pillars. Space / ↑ / W / click / tap flaps, gravity pulls down, and P / Esc pauses. The game also pauses itself when the tab loses focus or is hidden. The best score is kept in `localStorage` (`updraft:best`).
+**Updraft**: a one-button arcade game played in the browser as a static single-page app, published to GitHub Pages. You fly a magpie through gaps between dusk-lit stone pillars. Space / ↑ / W / click / tap flaps, gravity pulls down, and P / Esc pauses. The game also pauses itself when the tab loses focus or is hidden. Runs earn bronze, silver and gold medals at 10, 25 and 50 points, and the sky turns from dusk to night as a run goes on. The best score is kept in `localStorage` (`updraft:best`).
 
 It has original art and an original name. Keep it that way, and don't copy the look, name or assets of any existing game.
 
@@ -20,7 +20,7 @@ There is no build step and there are no runtime dependencies. `web/` is served a
 | `web/main.js` | Entry point: fits the 2:3 playfield to the window, runs the rAF loop, handles input, saves the best score. |
 | `web/render.js` | Canvas renderer: sky, parallax hills, pillars, the ground, the magpie's flight pose (wing beat, tilt), the overlays, and `drawIcon()`. Colours are at the top. |
 | `web/magpie.js` | The magpie sprite (`paintMagpie`), drawn with canvas paths. Used by the renderer and the icons. |
-| `web/game.js` | Pure game model (physics, pillars, gap placement, scoring, collisions) on a fixed 400×600 logical field. No DOM. Tuning lives in `CFG`. |
+| `web/game.js` | Pure game model (physics, pillars, gap placement, scoring, medals, collisions) on a fixed 400×600 logical field. No DOM. Tuning lives in `CFG`. |
 | `test/game.test.js` | `node --test` for the game model. |
 | `.github/workflows/pages.yml` | On every push to `main`: run the tests, then deploy `web/` to GitHub Pages. |
 

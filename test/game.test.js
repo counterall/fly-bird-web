@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { CFG, GROUND, START_Y, W, createGame, flap, step, hitsRect, gapFor, speedFor, isCalm, shiftFor } from '../web/game.js'
+import { CFG, GROUND, MEDALS, START_Y, W, createGame, flap, step, hitsRect, gapFor, speedFor, isCalm, shiftFor, medalFor, nextMedal } from '../web/game.js'
 
 const run = (g, secs, rand = () => 0.5) => { for (let i = 0; i < secs * 60; i++) step(g, 1 / 60, rand); return g }
 
@@ -136,4 +136,26 @@ test('calm stretches follow every tenth pillar', () => {
   assert.equal(shiftFor(10, 30), CFG.calmShift)
   assert.equal(shiftFor(9, 0), CFG.shift)
   assert.ok(shiftFor(9, 30) > shiftFor(9, 0))
+})
+
+test('medals by score', () => {
+  assert.equal(medalFor(9), null)
+  assert.equal(medalFor(10).name, 'bronze')
+  assert.equal(medalFor(49).name, 'silver')
+  assert.equal(medalFor(500).name, 'gold')
+  assert.equal(nextMedal(0).name, 'bronze')
+  assert.equal(nextMedal(25).name, 'gold')
+  assert.equal(nextMedal(50), null)
+  assert.deepEqual(MEDALS.map(m => m.score), [10, 25, 50])
+})
+
+test('distance flown grows only while playing and records when points score', () => {
+  const g = run(createGame(), 1)
+  assert.equal(g.dist, 0)
+  const h = flap(createGame())
+  h.y = 300
+  h.pillars = [{ x: CFG.birdX - CFG.birdR - CFG.pillarW + 1, gapY: 300, gap: 400, passed: false }]
+  step(h, 1 / 60)
+  assert.ok(h.dist > 0)
+  assert.equal(h.scoredAt, h.t)
 })

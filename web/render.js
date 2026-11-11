@@ -1,16 +1,22 @@
 // Canvas renderer for Updraft. Draws one frame of a game from game.js onto a
 // 2D context already scaled to the W×H logical playfield.
-import { CFG, GROUND, H, W } from './game.js'
+import { CFG, GROUND, H, W, medalFor, nextMedal } from './game.js'
 import { paintMagpie } from './magpie.js'
 
 // ── palette ────────────────────────────────────────────────────────────────
+// The sky turns from dusk to night over a run; *_NIGHT is the far end.
 const SKY = ['#2b2560', '#5b3f86', '#c4627a', '#f4a76a']
-const SKY_NIGHT = '#1a1640' // top of the extra sky on tall screens
-const SUN = 'rgba(255, 214, 160, 0.9)'
+const SKY_NIGHT = ['#0e0c26', '#1b1946', '#2c2862', '#4a3a6e']
+const SKY_TOP = '#1a1640' // top of the extra sky on tall screens
+const SKY_TOP_NIGHT = '#08071a'
+const SUN = [255, 214, 160]
+const SUN_NIGHT = [240, 130, 96] // reddens as it sets
+const MOON = '#f3ecdc'
 const STAR = '#fff4e6'
-const CLOUD = 'rgba(255, 235, 225, 0.22)'
 const HILL_FAR = '#6a4a86'
+const HILL_FAR_NIGHT = '#2f2752'
 const HILL_NEAR = '#3d3268'
+const HILL_NEAR_NIGHT = '#1d1838'
 // Pillars: dusk-lit plum stone, rim-lit on the sun side (right) in peach.
 const STONE = '#523b7c'
 const STONE_SHADE = '#3c2b5f'
@@ -19,7 +25,9 @@ const STONE_COURSE = 'rgba(255, 200, 170, 0.10)'
 const STONE_CAP = '#664a92'
 const CAP_GLOW = '#ffc993'
 const GROUND_TOP = '#2c5a5a'
+const GROUND_TOP_NIGHT = '#1e4141'
 const GROUND_BODY = '#1f3f45'
+const GROUND_BODY_NIGHT = '#152c31'
 const GROUND_STRIPE = 'rgba(255, 255, 255, 0.08)'
 // Overlays
 const INK = '#fff8ee'
@@ -27,33 +35,59 @@ const INK_OUTLINE = 'rgba(30, 20, 60, 0.75)'
 const GOLD = '#ffd6a0'
 const CARD = 'rgba(30, 22, 60, 0.72)'
 const DIM = 'rgba(20, 14, 40, 0.45)'
+// Medals: face and rim
+const MEDAL = {
+  bronze: ['#d99a62', '#94582c'],
+  silver: ['#dde1ea', '#949cae'],
+  gold: ['#ffd66e', '#c48a1a'],
+}
 
 const MAGPIE_SCALE = 1.3 // visual only; collisions use CFG.birdR
+const NIGHT_DIST = 45 * CFG.spacing // distance flown by full night: ~45 points
+const MEDAL_TOAST = 1.6 // s the "medal!" message shows after earning one
+
+// ── colour helpers ─────────────────────────────────────────────────────────
+const rgb = hex => [1, 3, 5].map(i => Number.parseInt(hex.slice(i, i + 2), 16))
+const lerp = (a, b, t) => a + (b - a) * t
+/** Mix two #rrggbb colours (or [r, g, b] arrays); t = 0 gives a. */
+function mix(a, b, t, alpha = 1) {
+  const [ar, ag, ab] = typeof a === 'string' ? rgb(a) : a
+  const [br, bg, bb] = typeof b === 'string' ? rgb(b) : b
+  return `rgba(${Math.round(lerp(ar, br, t))}, ${Math.round(lerp(ag, bg, t))}, ${Math.round(lerp(ab, bb, t))}, ${alpha})`
+}
+const clamp01 = x => Math.max(0, Math.min(1, x))
+const smooth = x => x * x * (3 - 2 * x)
+
+/** 0 at dusk, 1 at full night; follows the distance flown this run. */
+const nightFor = g => smooth(clamp01(g.dist / NIGHT_DIST))
 
 // ── background ─────────────────────────────────────────────────────────────
-function drawSky(c, top, ground, bottom) {
+function drawSky(c, top, ground, bottom, night) {
   const sky = c.createLinearGradient(0, -top, 0, ground)
   const span = ground + top
-  sky.addColorStop(0, top > 0 ? SKY_NIGHT : SKY[0])
-  SKY.forEach((col, i) => sky.addColorStop((top + (i / (SKY.length - 1)) * ground) / span, col))
+  sky.addColorStop(0, top > 0 ? mix(SKY_TOP, SKY_TOP_NIGHT, night) : mix(SKY[0], SKY_NIGHT[0], night))
+  SKY.forEach((col, i) => sky.addColorStop((top + (i / (SKY.length - 1)) * ground) / span, mix(col, SKY_NIGHT[i], night)))
   c.fillStyle = sky
   c.fillRect(0, -top, W, bottom + top)
 }
 
-// Faint stars for the extra sky a tall screen shows above the playfield.
-const STARS = Array.from({ length: 40 }, (_, i) => ({
+// Faint stars: at dusk only in the extra sky a tall screen shows above the
+// playfield; they come out lower down as night falls.
+const STARS = Array.from({ length: 70 }, (_, i) => ({
   x: (i * 97.3) % W,
-  y: 110 - ((i * 61.7) % 420),
+  y: 430 - ((i * 61.7) % 850),
   r: 0.6 + ((i * 7) % 5) * 0.18,
   phase: i * 1.7,
 }))
 
-function drawStars(c, top, t) {
+function drawStars(c, top, t, night) {
   c.fillStyle = STAR
+  const limit = 120 + night * 300 // stars fade out below this line
   for (const s of STARS) {
     if (s.y < -top) continue
     // fade out towards the warmer part of the sky
-    const fade = Math.max(0, Math.min(1, (120 - s.y) / 160))
+    const fade = clamp01((limit - s.y) / 160)
+    if (fade === 0) continue
     c.globalAlpha = fade * (0.45 + 0.25 * Math.sin(t * 1.3 + s.phase))
     c.beginPath()
     c.arc(s.x, s.y, s.r, 0, Math.PI * 2)
@@ -62,15 +96,43 @@ function drawStars(c, top, t) {
   c.globalAlpha = 1
 }
 
-function drawSun(c) {
-  c.fillStyle = SUN
+/** The sun sinks behind the hills as night falls. */
+function drawSun(c, night) {
+  c.fillStyle = mix(SUN, SUN_NIGHT, night, 0.9)
   c.beginPath()
-  c.arc(W * 0.72, GROUND - 150, 54, 0, Math.PI * 2)
+  c.arc(W * 0.72, lerp(GROUND - 150, GROUND + 60, night), 54, 0, Math.PI * 2)
   c.fill()
 }
 
-function drawClouds(c, scroll) {
-  c.fillStyle = CLOUD
+/** A crescent moon that fades in over the second half of the run to night. */
+function drawMoon(c, night) {
+  const a = clamp01((night - 0.4) / 0.5)
+  if (a === 0) return
+  const x = 86
+  const y = 104
+  c.save()
+  c.globalAlpha = a
+  const halo = c.createRadialGradient(x, y, 12, x, y, 44)
+  halo.addColorStop(0, 'rgba(243, 236, 220, 0.16)')
+  halo.addColorStop(1, 'rgba(243, 236, 220, 0)')
+  c.fillStyle = halo
+  c.beginPath()
+  c.arc(x, y, 44, 0, Math.PI * 2)
+  c.fill()
+  // crescent: the disc, minus a second disc offset towards the upper right
+  c.beginPath()
+  c.arc(x, y, 15, 0, Math.PI * 2)
+  c.clip()
+  c.fillStyle = MOON
+  c.beginPath()
+  c.rect(x - 16, y - 16, 32, 32)
+  c.arc(x + 7, y - 4, 13, 0, Math.PI * 2)
+  c.fill('evenodd')
+  c.restore()
+}
+
+function drawClouds(c, scroll, night) {
+  c.fillStyle = `rgba(255, 235, 225, ${lerp(0.22, 0.1, night)})`
   const span = W + 160
   for (let i = 0; i < 4; i++) {
     const x = ((i * 137 - scroll * 0.12) % span + span) % span - 80
@@ -139,10 +201,10 @@ function drawPillars(c, pillars, top, ground) {
   }
 }
 
-function drawGround(c, scroll, ground, bottom) {
-  c.fillStyle = GROUND_BODY
+function drawGround(c, scroll, ground, bottom, night) {
+  c.fillStyle = mix(GROUND_BODY, GROUND_BODY_NIGHT, night)
   c.fillRect(0, ground, W, bottom - ground)
-  c.fillStyle = GROUND_TOP
+  c.fillStyle = mix(GROUND_TOP, GROUND_TOP_NIGHT, night)
   c.fillRect(0, ground, W, 10)
   c.fillStyle = GROUND_STRIPE
   const off = scroll % 28
@@ -181,6 +243,7 @@ function text(c, s, x, y, size, color = INK) {
   c.strokeText(s, x, y)
   c.fillStyle = color
   c.fillText(s, x, y)
+  return c.measureText(s).width
 }
 
 function card(c, x, y, w, h) {
@@ -190,24 +253,89 @@ function card(c, x, y, w, h) {
   c.fill()
 }
 
+const capital = s => s[0].toUpperCase() + s.slice(1)
+
+/** A medal of the given tier ('bronze' | 'silver' | 'gold'), or an empty slot. */
+function drawMedal(c, x, y, r, tier) {
+  c.save()
+  if (!tier) {
+    c.strokeStyle = 'rgba(255, 248, 238, 0.25)'
+    c.lineWidth = 2
+    c.setLineDash([4, 4])
+    c.beginPath()
+    c.arc(x, y, r - 1, 0, Math.PI * 2)
+    c.stroke()
+    c.restore()
+    return
+  }
+  const [face, rim] = MEDAL[tier]
+  c.fillStyle = rim
+  c.beginPath()
+  c.arc(x, y, r, 0, Math.PI * 2)
+  c.fill()
+  c.fillStyle = face
+  c.beginPath()
+  c.arc(x, y, r * 0.8, 0, Math.PI * 2)
+  c.fill()
+  // embossed five-pointed star
+  c.fillStyle = rim
+  c.beginPath()
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 5
+    const rr = i % 2 ? r * 0.22 : r * 0.5
+    c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr)
+  }
+  c.closePath()
+  c.fill()
+  // shine
+  c.strokeStyle = 'rgba(255, 255, 255, 0.45)'
+  c.lineWidth = Math.max(1, r * 0.08)
+  c.beginPath()
+  c.arc(x, y, r * 0.68, Math.PI * 1.05, Math.PI * 1.45)
+  c.stroke()
+  c.restore()
+}
+
 function drawTitle(c, best, touch) {
   text(c, 'UPDRAFT', W / 2, 150, 46)
   text(c, touch ? 'Tap to fly' : 'Click or press Space to fly', W / 2, 200, 17)
-  if (best > 0) text(c, `Best ${best}`, W / 2, 232, 17, GOLD)
+  if (best > 0) {
+    const w = text(c, `Best ${best}`, W / 2, 232, 17, GOLD)
+    const medal = medalFor(best)
+    if (medal) drawMedal(c, W / 2 - w / 2 - 16, 232, 9, medal.name)
+  }
+  if (!touch) text(c, 'P or Esc to pause', W / 2, 300, 13, 'rgba(255, 248, 238, 0.7)')
+}
+
+/** "Bronze medal!" under the score, just after a run earns a medal. */
+function drawMedalToast(c, g) {
+  const medal = medalFor(g.score)
+  if (!medal || medal.score !== g.score || g.t - g.scoredAt > MEDAL_TOAST) return
+  const k = (g.t - g.scoredAt) / MEDAL_TOAST
+  c.globalAlpha = k < 0.8 ? 1 : (1 - k) / 0.2
+  drawMedal(c, W / 2 - 78, 112, 11, medal.name)
+  text(c, `${capital(medal.name)} medal!`, W / 2 + 12, 112, 20, MEDAL[medal.name][0])
+  c.globalAlpha = 1
 }
 
 function drawGameOver(c, g, best, touch) {
   const since = g.t - g.overAt
   if (since <= 0.25) return // let the crash register first
   const isBest = g.score >= best && g.score > 0
-  card(c, W / 2 - 130, 170, 260, 210)
-  text(c, 'Grounded', W / 2, 208, 32, GOLD)
-  text(c, 'Score', W / 2 - 60, 258, 15)
-  text(c, 'Best', W / 2 + 60, 258, 15)
-  text(c, String(g.score), W / 2 - 60, 295, 38)
-  text(c, String(best), W / 2 + 60, 295, 38, isBest ? GOLD : INK)
-  if (isBest) text(c, 'New best!', W / 2, 332, 15, GOLD)
-  if (since > CFG.restartDelay) text(c, touch ? 'Tap to fly again' : 'Space to fly again', W / 2, 360, 14)
+  const medal = medalFor(g.score)
+  const next = nextMedal(g.score)
+  card(c, W / 2 - 150, 166, 300, 222)
+  text(c, 'Grounded', W / 2, 204, 32, GOLD)
+  // medal on the left, score and best on the right
+  drawMedal(c, 115, 284, 30, medal?.name)
+  text(c, medal ? capital(medal.name) : 'No medal', 115, 332, 13, medal ? MEDAL[medal.name][0] : 'rgba(255, 248, 238, 0.6)')
+  text(c, 'Score', 215, 250, 15)
+  text(c, 'Best', 295, 250, 15)
+  text(c, String(g.score), 215, 286, 38)
+  text(c, String(best), 295, 286, 38, isBest ? GOLD : INK)
+  if (isBest) text(c, 'New best!', 255, 322, 15, GOLD)
+  else if (next) text(c, `${capital(next.name)} at ${next.score}`, 255, 322, 13, 'rgba(255, 248, 238, 0.7)')
+  if (since > CFG.restartDelay) text(c, touch ? 'Tap to fly again' : 'Space to fly again', W / 2, 364, 14)
 }
 
 function drawPaused(c, top, bottom, touch) {
@@ -218,28 +346,33 @@ function drawPaused(c, top, bottom, touch) {
 }
 
 /**
- * Draw one frame. `view.top` / `view.bottom` are extra logical pixels shown
- * above y = 0 and below y = H on screens taller than 2:3 (phones), and
- * `view.ground` is the ground line there. The playfield itself is unchanged;
- * the sky and ground just extend.
+ * Draw one frame. `ui` is { best, paused, touch }. `view.top` /
+ * `view.bottom` are extra logical pixels shown above y = 0 and below y = H on
+ * screens taller than 2:3 (phones), and `view.ground` is the ground line
+ * there. The playfield itself is unchanged; the sky and ground just extend.
  */
-export function render(c, g, best, paused, touch, view = { top: 0, bottom: 0, ground: GROUND }) {
+export function render(c, g, ui, view = { top: 0, bottom: 0, ground: GROUND }) {
+  const { best, paused, touch } = ui
   const top = view.top
   const bottom = H + view.bottom
   const ground = view.ground
+  const night = nightFor(g)
 
-  drawSky(c, top, ground, bottom)
-  drawStars(c, top, g.t)
-  drawSun(c)
-  drawClouds(c, g.scroll)
-  drawHills(c, g.scroll, 0.2, 1.7, 60, GROUND - 90, HILL_FAR, ground)
-  drawHills(c, g.scroll, 0.45, 4.2, 40, GROUND - 30, HILL_NEAR, ground)
+  drawSky(c, top, ground, bottom, night)
+  drawStars(c, top, g.t, night)
+  drawMoon(c, night)
+  drawSun(c, night)
+  drawClouds(c, g.scroll, night)
+  drawHills(c, g.scroll, 0.2, 1.7, 60, GROUND - 90, mix(HILL_FAR, HILL_FAR_NIGHT, night), ground)
+  drawHills(c, g.scroll, 0.45, 4.2, 40, GROUND - 30, mix(HILL_NEAR, HILL_NEAR_NIGHT, night), ground)
   drawPillars(c, g.pillars, top, ground)
-  drawGround(c, g.scroll, ground, bottom)
+  drawGround(c, g.scroll, ground, bottom, night)
   drawMagpie(c, g)
 
-  if (g.mode === 'playing') text(c, String(g.score), W / 2, 64, 52)
-  else if (g.mode === 'ready') drawTitle(c, best, touch)
+  if (g.mode === 'playing') {
+    text(c, String(g.score), W / 2, 64, 52)
+    drawMedalToast(c, g)
+  } else if (g.mode === 'ready') drawTitle(c, best, touch)
   else drawGameOver(c, g, best, touch)
 
   if (paused) drawPaused(c, top, bottom, touch)
@@ -255,7 +388,7 @@ export function drawIcon(c, size, safe = false) {
   c.save()
   c.scale(size / 100, size / 100)
   const sky = c.createLinearGradient(0, 0, 0, 100)
-  sky.addColorStop(0, SKY_NIGHT)
+  sky.addColorStop(0, SKY_TOP)
   sky.addColorStop(0.35, SKY[1])
   sky.addColorStop(0.72, SKY[2])
   sky.addColorStop(1, SKY[3])

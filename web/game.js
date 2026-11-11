@@ -31,13 +31,23 @@ export const CFG = Object.freeze({
   restartDelay: 0.6, // s after crashing before a flap restarts
 })
 
+/** Medals for a run, lowest first. */
+export const MEDALS = Object.freeze([
+  { name: 'bronze', score: 10 },
+  { name: 'silver', score: 25 },
+  { name: 'gold', score: 50 },
+])
+export const medalFor = score => MEDALS.findLast(m => score >= m.score) ?? null
+export const nextMedal = score => MEDALS.find(m => score < m.score) ?? null
+
 /**
  * A fresh game. `ceil` / `floor` are the top of the visible sky and the ground
  * line; main.js moves them out on screens taller than 2:3. `spawned` counts
- * pillars so far.
+ * pillars so far, `dist` is the distance flown, `scoredAt` the time of the
+ * last point.
  */
 export function createGame() {
-  return { mode: 'ready', t: 0, y: START_Y, vy: 0, pillars: [], score: 0, scroll: 0, overAt: 0, flapAt: -1, spawned: 0, ceil: 0, floor: GROUND }
+  return { mode: 'ready', t: 0, y: START_Y, vy: 0, pillars: [], score: 0, scroll: 0, overAt: 0, flapAt: -1, scoredAt: -1, spawned: 0, dist: 0, ceil: 0, floor: GROUND }
 }
 
 export const speedFor = score => CFG.speed + Math.min(score * CFG.speedPerPoint, CFG.speedCap)
@@ -102,11 +112,13 @@ function clampToGround(g) {
 function scrollPillars(g, dt, rand) {
   const dx = speedFor(g.score) * dt
   g.scroll += dx
+  g.dist += dx
   for (const p of g.pillars) {
     p.x -= dx
     if (!p.passed && p.x + CFG.pillarW < CFG.birdX - CFG.birdR) {
       p.passed = true
       g.score++
+      g.scoredAt = g.t
     }
   }
   g.pillars = g.pillars.filter(p => p.x + CFG.pillarW > DESPAWN_X)
