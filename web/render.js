@@ -26,13 +26,13 @@ const RIM = 'rgba(255, 196, 150, 0.5)' // warm sunset rim light
 const hillY = (x, seed, amp, base) =>
   base - amp * (0.55 * Math.sin(x * 0.011 + seed) + 0.3 * Math.sin(x * 0.027 + seed * 2.3) + 0.15 * Math.sin(x * 0.06 + seed * 5.1))
 
-function drawHills(c, scroll, factor, seed, amp, base, color) {
+function drawHills(c, scroll, factor, seed, amp, base, color, ground) {
   const off = scroll * factor
   c.fillStyle = color
   c.beginPath()
-  c.moveTo(0, GROUND)
+  c.moveTo(0, ground)
   for (let x = 0; x <= W; x += 8) c.lineTo(x, hillY(x + off, seed, amp, base))
-  c.lineTo(W, GROUND)
+  c.lineTo(W, ground)
   c.closePath()
   c.fill()
 }
@@ -296,13 +296,14 @@ function drawStars(c, top, t) {
  * above y = 0 and below y = H on screens taller than 2:3 (phones); the
  * playfield itself is unchanged, the sky and ground just extend.
  */
-export function render(c, g, best, paused, touch, view = { top: 0, bottom: 0 }) {
+export function render(c, g, best, paused, touch, view = { top: 0, bottom: 0, ground: GROUND }) {
   const top = view.top
   const bottom = H + view.bottom
-  const sky = c.createLinearGradient(0, -top, 0, GROUND)
-  const span = GROUND + top
+  const ground = view.ground ?? GROUND // ground line; below GROUND on tall screens
+  const sky = c.createLinearGradient(0, -top, 0, ground)
+  const span = ground + top
   sky.addColorStop(0, top > 0 ? SKY_NIGHT : SKY[0])
-  SKY.forEach((col, i) => sky.addColorStop((top + (i / (SKY.length - 1)) * GROUND) / span, col))
+  SKY.forEach((col, i) => sky.addColorStop((top + (i / (SKY.length - 1)) * ground) / span, col))
   c.fillStyle = sky
   c.fillRect(0, -top, W, bottom + top)
   drawStars(c, top, g.t)
@@ -314,24 +315,24 @@ export function render(c, g, best, paused, touch, view = { top: 0, bottom: 0 }) 
   c.fill()
 
   drawClouds(c, g.scroll)
-  drawHills(c, g.scroll, 0.2, 1.7, 60, GROUND - 90, HILL_FAR)
-  drawHills(c, g.scroll, 0.45, 4.2, 40, GROUND - 30, HILL_NEAR)
+  drawHills(c, g.scroll, 0.2, 1.7, 60, GROUND - 90, HILL_FAR, ground)
+  drawHills(c, g.scroll, 0.45, 4.2, 40, GROUND - 30, HILL_NEAR, ground)
 
   for (const p of g.pillars) {
     const gapTop = p.gapY - p.gap / 2
     const gapBottom = p.gapY + p.gap / 2
     drawPillarPart(c, p.x, -view.top, gapTop + view.top, true)
-    drawPillarPart(c, p.x, gapBottom, GROUND - gapBottom, false)
+    drawPillarPart(c, p.x, gapBottom, ground - gapBottom, false)
   }
 
   // ground
   c.fillStyle = GROUND_BODY
-  c.fillRect(0, GROUND, W, bottom - GROUND)
+  c.fillRect(0, ground, W, bottom - ground)
   c.fillStyle = GROUND_TOP
-  c.fillRect(0, GROUND, W, 10)
+  c.fillRect(0, ground, W, 10)
   c.fillStyle = 'rgba(255,255,255,0.08)'
   const off = g.scroll % 28
-  for (let x = -off; x < W; x += 28) c.fillRect(x, GROUND + 18, 14, 3)
+  for (let x = -off; x < W; x += 28) c.fillRect(x, ground + 18, 14, 3)
 
   drawMagpie(c, g)
 

@@ -63,3 +63,18 @@ test('circle/rect collision', () => {
   assert.ok(hitsRect(0, 0, 5, 3, -1, 10, 2))
   assert.ok(!hitsRect(0, 0, 5, 6, 0, 10, 10))
 })
+
+test('a lower floor (tall screens) moves the ground line and extends pillars to it', () => {
+  const g = flap(createGame())
+  g.floor = GROUND + 50
+  for (let i = 0; i < 60 * 3; i++) { g.pillars = []; step(g, 1 / 60, () => 0.5) }
+  assert.equal(g.mode, 'over')
+  assert.equal(g.y, GROUND + 50 - CFG.birdR)
+  // below GROUND but under a pillar still collides
+  const h = flap(createGame())
+  h.floor = GROUND + 50
+  h.y = GROUND + 20
+  h.pillars = [{ x: CFG.birdX - 5, gapY: 300, gap: 150, passed: false }]
+  step(h, 1 / 60)
+  assert.equal(h.mode, 'over')
+})

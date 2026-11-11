@@ -23,7 +23,7 @@ export const CFG = Object.freeze({
 })
 
 export function createGame() {
-  return { mode: 'ready', t: 0, y: H * 0.42, vy: 0, pillars: [], score: 0, scroll: 0, overAt: 0, flapAt: -1, ceil: 0 }
+  return { mode: 'ready', t: 0, y: H * 0.42, vy: 0, pillars: [], score: 0, scroll: 0, overAt: 0, flapAt: -1, ceil: 0, floor: GROUND }
 }
 
 export const speedFor = score => CFG.speed + Math.min(score * CFG.speedPerPoint, CFG.speedCap)
@@ -56,12 +56,13 @@ export function hitsRect(cx, cy, r, x, y, w, h) {
 
 export function collides(g) {
   const r = CFG.birdR
-  if (g.y + r >= GROUND) return true
+  const floor = g.floor ?? GROUND
+  if (g.y + r >= floor) return true
   for (const p of g.pillars) {
     const top = p.gapY - p.gap / 2
     const bottom = p.gapY + p.gap / 2
     if (hitsRect(CFG.birdX, g.y, r, p.x, -1000, CFG.pillarW, top + 1000)) return true
-    if (hitsRect(CFG.birdX, g.y, r, p.x, bottom, CFG.pillarW, GROUND - bottom)) return true
+    if (hitsRect(CFG.birdX, g.y, r, p.x, bottom, CFG.pillarW, floor - bottom)) return true
   }
   return false
 }
@@ -80,11 +81,12 @@ export function step(g, dt, rand = Math.random) {
   // Gravity applies while playing and while the wreck falls after a crash.
   g.vy = Math.min(g.vy + CFG.gravity * dt, CFG.maxFall)
   g.y += g.vy * dt
+  // floor: the ground line, lower than GROUND when a tall screen shows more ground.
   // ceiling: top of the visible sky (negative when a tall screen shows extra sky)
   if (g.y - CFG.birdR < g.ceil) { g.y = g.ceil + CFG.birdR; g.vy = 0 }
 
   if (g.mode === 'over') {
-    if (g.y + CFG.birdR > GROUND) { g.y = GROUND - CFG.birdR; g.vy = 0 }
+    if (g.y + CFG.birdR > g.floor) { g.y = g.floor - CFG.birdR; g.vy = 0 }
     return g
   }
 
@@ -104,7 +106,7 @@ export function step(g, dt, rand = Math.random) {
   if (collides(g)) {
     g.mode = 'over'
     g.overAt = g.t
-    if (g.y + CFG.birdR > GROUND) { g.y = GROUND - CFG.birdR; g.vy = 0 }
+    if (g.y + CFG.birdR > g.floor) { g.y = g.floor - CFG.birdR; g.vy = 0 }
   }
   return g
 }

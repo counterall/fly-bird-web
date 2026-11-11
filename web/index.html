@@ -13,20 +13,24 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
   <link rel="manifest" href="./manifest.webmanifest">
   <style>
-    /* html gets a background too, so no white shows under mobile browser toolbars */
-    html { background: #1a1640; }
+    /* Anything the canvas doesn't cover (e.g. behind mobile browser bars)
+       matches the scene: night sky in the top half, ground in the bottom half. */
+    html { background: linear-gradient(to bottom, #1a1640 50%, #1f3f45 50%); overflow: hidden; }
     html, body { margin: 0; height: 100%; }
     body {
       background: radial-gradient(ellipse at 50% 30%, #3a2f6e, #16122e 70%);
       display: grid; place-items: center; overflow: hidden;
-      height: 100dvh; touch-action: none; user-select: none; -webkit-user-select: none;
+      /* 100vh is the *large* viewport on iOS/Android: the full screen height,
+         including the area under Safari's toolbar and the home indicator, so
+         the ground runs underneath them instead of stopping above. */
+      height: 100vh; touch-action: none; user-select: none; -webkit-user-select: none;
       -webkit-tap-highlight-color: transparent;
     }
     canvas {
       display: block; border-radius: 14px; outline: none;
       box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 16px 48px rgba(0, 0, 0, 0.45);
     }
-    body.fill { background: #1a1640; }
+    body.fill { background: transparent; }
     body.fill canvas { border-radius: 0; box-shadow: none; }
     noscript { color: #fff8ee; font: 16px system-ui, sans-serif; }
   </style>
