@@ -1,6 +1,6 @@
 // Canvas renderer for Updraft. Draws one frame of a game from game.js onto a
 // 2D context already scaled to the W×H logical playfield.
-import { CFG, GROUND, H, LEVEL, W, medalFor, nextMedal, trinketPos } from './game.js'
+import { CFG, GROUND, H, LEVEL, LEVELS, W, medalFor, nextMedal, trinketPos } from './game.js'
 import { paintMagpie } from './magpie.js'
 
 // ── palette ────────────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ const PICKUP_POP = 0.8 // s the "+1" floats up after a trinket is taken
 /** The sound toggle, top-right, in logical units; main.js hit-tests it. */
 export const MUTE_BUTTON = { x: W - 30, y: 30, r: 22 }
 /** The title screen's "Easy | Hard" toggle (centre and size); main.js hit-tests it. */
-export const LEVEL_TOGGLE = { x: W / 2, y: 300, w: 200, h: 40 }
+export const LEVEL_TOGGLE = { x: W / 2, y: 314, w: 270, h: 40 }
 
 // ── colour helpers ─────────────────────────────────────────────────────────
 const rgb = hex => [1, 3, 5].map(i => Number.parseInt(hex.slice(i, i + 2), 16))
@@ -409,29 +409,32 @@ function drawMedal(c, x, y, r, tier) {
   c.restore()
 }
 
-/** "Easy | Hard" pill with the chosen level highlighted. */
+/** "Easy | Normal | Hard" pill: one equal segment per level, the chosen one highlighted. */
 function drawLevelToggle(c, level) {
   const { x, y, w, h } = LEVEL_TOGGLE
+  const seg = w / LEVELS.length
+  const left = x - w / 2
   c.fillStyle = CARD
   c.beginPath()
-  c.roundRect(x - w / 2, y - h / 2, w, h, h / 2)
+  c.roundRect(left, y - h / 2, w, h, h / 2)
   c.fill()
-  const left = level === 'easy'
+  const i = LEVELS.indexOf(level)
   c.fillStyle = GOLD
   c.beginPath()
-  c.roundRect(left ? x - w / 2 + 3 : x + 1, y - h / 2 + 3, w / 2 - 4, h - 6, (h - 6) / 2)
+  c.roundRect(left + i * seg + 3, y - h / 2 + 3, seg - 6, h - 6, (h - 6) / 2)
   c.fill()
   c.font = `800 16px ${FONT}`
   c.textAlign = 'center'
   c.textBaseline = 'middle'
-  c.fillStyle = left ? CARD_INK : INK
-  c.fillText('Easy', x - w / 4, y + 1)
-  c.fillStyle = left ? INK : CARD_INK
-  c.fillText('Hard', x + w / 4, y + 1)
+  LEVELS.forEach((l, j) => {
+    c.fillStyle = j === i ? CARD_INK : INK
+    c.fillText(capital(l), left + (j + 0.5) * seg, y + 1)
+  })
 }
 
 const LEVEL_BLURB = {
   easy: 'Grab shiny things for extra lives',
+  normal: 'One life. Steady pillars.',
   hard: 'One life. Drifting pillars, updrafts.',
 }
 
@@ -481,8 +484,8 @@ function drawTitle(c, level, best, touch) {
     if (medal) drawMedal(c, W / 2 - w / 2 - 16, 232, 9, medal.name)
   }
   drawLevelToggle(c, level)
-  text(c, LEVEL_BLURB[level], W / 2, 340, 14)
-  if (!touch) text(c, '← → level · P pause · M sound', W / 2, 368, 13, 'rgba(255, 248, 238, 0.7)')
+  text(c, LEVEL_BLURB[level], W / 2, 354, 14)
+  if (!touch) text(c, '← → level · P pause · M sound', W / 2, 382, 13, 'rgba(255, 248, 238, 0.7)')
 }
 
 /** "Bronze medal!" under the score, just after a run earns a medal. */

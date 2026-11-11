@@ -53,6 +53,7 @@ export const CFG = Object.freeze({
  */
 export const LEVEL = Object.freeze({
   easy: Object.freeze({ lives: 1, maxLives: 3, trinkets: true, drifting: false, updrafts: false }),
+  normal: Object.freeze({ lives: 1, maxLives: 1, trinkets: false, drifting: false, updrafts: false }),
   hard: Object.freeze({ lives: 1, maxLives: 1, trinkets: false, drifting: true, updrafts: true }),
 })
 export const LEVELS = Object.freeze(Object.keys(LEVEL))

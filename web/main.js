@@ -4,7 +4,7 @@ import { LEVEL_TOGGLE, MUTE_BUTTON, render } from './render.js'
 import { createSound } from './sound.js'
 
 const LS_BEST = level => `updraft:best:${level}`
-const LS_BEST_OLD = 'updraft:best' // before levels: today's easy game
+const LS_BEST_OLD = 'updraft:best' // before levels: the game that is now normal
 const LS_LEVEL = 'updraft:level'
 const LS_MUTED = 'updraft:muted'
 
@@ -19,8 +19,9 @@ function store(key, v) {
 const canvas = document.getElementById('game')
 const c = canvas.getContext('2d')
 
-// One-off migration: the best score from before levels counts as easy.
-if (load(LS_BEST('easy')) === null && load(LS_BEST_OLD) !== null) store(LS_BEST('easy'), load(LS_BEST_OLD))
+// One-off migration: the best score from before levels counts as normal,
+// which plays the same as the game did then.
+if (load(LS_BEST('normal')) === null && load(LS_BEST_OLD) !== null) store(LS_BEST('normal'), load(LS_BEST_OLD))
 
 const bests = Object.fromEntries(LEVELS.map(l => [l, Number.parseInt(load(LS_BEST(l)) ?? '0', 10) || 0]))
 let g = createGame(LEVELS.includes(load(LS_LEVEL)) ? load(LS_LEVEL) : 'easy')
@@ -143,12 +144,16 @@ function toLogical(clientX, clientY) {
   }
 }
 
-/** The level whose half of the title-screen toggle is at p, if any. */
+/** The level whose segment of the title-screen toggle is at p, if any. */
 function levelAt({ x, y }) {
   const t = LEVEL_TOGGLE
   if (g.phase !== 'ready' || Math.abs(x - t.x) > t.w / 2 || Math.abs(y - t.y) > t.h / 2) return null
-  return x < t.x ? 'easy' : 'hard'
+  const i = Math.floor(((x - (t.x - t.w / 2)) / t.w) * LEVELS.length)
+  return LEVELS[Math.min(LEVELS.length - 1, Math.max(0, i))]
 }
+
+/** The level `by` steps from the current one, stopping at the ends. */
+const levelBy = by => LEVELS[Math.min(LEVELS.length - 1, Math.max(0, LEVELS.indexOf(g.level) + by))]
 
 addEventListener('keydown', e => {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return
@@ -156,8 +161,9 @@ addEventListener('keydown', e => {
   if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); touch = false; press() }
   else if (e.code === 'KeyP' || e.code === 'Escape') { e.preventDefault(); togglePause() }
   else if (e.code === 'KeyM') { e.preventDefault(); toggleMute() }
-  else if (e.code === 'ArrowLeft' || e.code === 'Digit1') { e.preventDefault(); chooseLevel('easy') }
-  else if (e.code === 'ArrowRight' || e.code === 'Digit2') { e.preventDefault(); chooseLevel('hard') }
+  else if (e.code === 'ArrowLeft') { e.preventDefault(); chooseLevel(levelBy(-1)) }
+  else if (e.code === 'ArrowRight') { e.preventDefault(); chooseLevel(levelBy(1)) }
+  else if (/^Digit[1-9]$/.test(e.code) && LEVELS[e.code.slice(5) - 1]) { e.preventDefault(); chooseLevel(LEVELS[e.code.slice(5) - 1]) }
 })
 // Anywhere on the page counts as a flap, so phones don't need to aim at the
 // canvas; only the mute button and the level toggle are excluded.

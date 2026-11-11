@@ -163,7 +163,7 @@ test('distance flown grows only while playing and records when points score', ()
 })
 
 test('a game keeps its level across restarts', () => {
-  assert.deepEqual(LEVELS, ['easy', 'hard'])
+  assert.deepEqual(LEVELS, ['easy', 'normal', 'hard'])
   assert.equal(createGame().level, 'easy')
   const g = run(flap(createGame('hard')), 3)
   g.t += CFG.restartDelay
@@ -330,4 +330,17 @@ test('spawned updrafts sit between pillars and scroll away with them', () => {
   g.drafts[0].x = -CFG.draftW - 20
   step(g, 1 / 60)
   assert.equal(g.drafts.length, 0)
+})
+
+test('normal: the classic game, with one life and nothing extra', () => {
+  for (let n = 0; n < 60; n++) {
+    assert.equal(driftFor('normal', n), 0)
+    assert.equal(draftFor('normal', n), 0)
+    assert.equal(hasTrinket(createGame('normal'), n), false)
+  }
+  const g = flap(createGame('normal'))
+  assert.equal(g.lives, 1)
+  g.pillars = [wall()]
+  step(g, 1 / 60)
+  assert.equal(g.phase, 'over')
 })
