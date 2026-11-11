@@ -109,7 +109,9 @@ function frame(now) {
     const was = g.phase
     const score = g.score
     const lives = g.lives
+    const inDraft = g.inDraft
     step(g, dt)
+    if (g.inDraft && !inDraft) sound.play('draft')
     if (g.score > score) sound.play(medalFor(g.score)?.score === g.score ? 'medal' : 'score')
     if (g.lives > lives) sound.play('trinket')
     if (g.lives < lives && g.phase === 'playing') sound.play('hurt')

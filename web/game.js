@@ -39,6 +39,12 @@ export const CFG = Object.freeze({
   driftPerPillar: 2, // …widening with each pillar…
   driftMax: 56, // …up to this
   driftPeriod: 2.4, // s for one full up-and-down
+  draftFrom: 13, // on levels with updrafts, one sits before pillar 13 (counting from 0)…
+  draftEvery: 3, // …and every 3rd pillar after it, except in calm stretches
+  draftW: 80, // width of an updraft column
+  draftSpeed: 140, // the rising air carries the bird up this fast, px/s, at the column's middle…
+  draftSpeedPerPillar: 2, // …faster with each pillar…
+  draftSpeedMax: 200, // …up to this
 })
 
 /**
@@ -46,8 +52,8 @@ export const CFG = Object.freeze({
  * `lives`: lives at the start. `maxLives`: how many trinkets can stack up to.
  */
 export const LEVEL = Object.freeze({
-  easy: Object.freeze({ lives: 1, maxLives: 3, trinkets: true, drifting: false }),
-  hard: Object.freeze({ lives: 1, maxLives: 1, trinkets: false, drifting: true }),
+  easy: Object.freeze({ lives: 1, maxLives: 3, trinkets: true, drifting: false, updrafts: false }),
+  hard: Object.freeze({ lives: 1, maxLives: 1, trinkets: false, drifting: true, updrafts: true }),
 })
 export const LEVELS = Object.freeze(Object.keys(LEVEL))
 
@@ -67,6 +73,7 @@ export const nextMedal = score => MEDALS.find(m => score < m.score) ?? null
  *   moves them out on screens taller than 2:3.
  * - `spawned`: pillars so far. `dist`: distance flown. `scoredAt`: time of the
  *   last point.
+ * - `drafts`: updraft columns ({ x, speed }); `inDraft`: the bird is in one.
  * - `lives`: lives left, including the current one. After a hit that isn't the
  *   last, the bird is a `ghost` (passes through pillars) from `hurtAt` on.
  */
@@ -74,7 +81,7 @@ export function createGame(level = 'easy') {
   return {
     level, phase: 'ready', t: 0, y: START_Y, vy: 0, pillars: [], score: 0, scroll: 0,
     overAt: 0, flapAt: -1, scoredAt: -1, spawned: 0, dist: 0, ceil: 0, floor: GROUND,
-    lives: LEVEL[level].lives, ghost: false, hurtAt: -1,
+    lives: LEVEL[level].lives, ghost: false, hurtAt: -1, drafts: [], inDraft: false,
   }
 }
 
@@ -116,6 +123,21 @@ export function driftFor(level, n) {
   return Math.min(CFG.driftMax, CFG.drift + (n - CFG.driftFrom) * CFG.driftPerPillar)
 }
 
+/** How fast the updraft before pillar n rises (0: there isn't one). */
+export function draftFor(level, n) {
+  if (!LEVEL[level].updrafts || n < CFG.draftFrom || isCalm(n) || (n - CFG.draftFrom) % CFG.draftEvery) return 0
+  return Math.min(CFG.draftSpeedMax, CFG.draftSpeed + (n - CFG.draftFrom) * CFG.draftSpeedPerPillar)
+}
+
+/**
+ * How fast an updraft carries the bird up right now: full speed at the
+ * column's middle, easing to 0 at its sides, so the ride is smooth.
+ */
+export function draftRise(d) {
+  const u = (CFG.birdX - d.x) / CFG.draftW
+  return u > 0 && u < 1 ? d.speed * Math.sin(Math.PI * u) : 0
+}
+
 /**
  * A pillar's gap is centred on `baseY`; a drifting one (`drift` > 0) swings
  * ± drift around it, and `gapY` is where it is right now.
@@ -124,7 +146,8 @@ function spawn(g, rand) {
   const gap = gapFor(g.score)
   const edgeLo = CFG.edge + gap / 2
   const edgeHi = GROUND - CFG.edge - gap / 2
-  const prev = g.pillars.at(-1)?.baseY ?? g.pillars.at(-1)?.gapY ?? START_Y
+  const last = g.pillars.at(-1)
+  const prev = last?.baseY ?? last?.gapY ?? START_Y
   // a drifting gap leaves room to swing inside the edges, and its drift eats
   // into the allowed jump, so the worst case stays fair
   const drift = Math.min(driftFor(g.level, g.spawned), (edgeHi - edgeLo) / 2)
@@ -141,9 +164,15 @@ function spawn(g, rand) {
   }
   // side: -1 near the top cap, 1 near the bottom one. takenAt: when collected.
   if (hasTrinket(g, g.spawned)) p.trinket = { side: rand() < 0.5 ? -1 : 1, takenAt: -1 }
+  // an updraft fills the middle of the space before this pillar
+  const speed = draftFor(g.level, g.spawned)
+  if (speed && last) g.drafts.push({ x: (last.x + CFG.pillarW + SPAWN_X - CFG.draftW) / 2, speed })
   g.pillars.push(p)
   g.spawned++
 }
+
+/** The updraft the bird is in, if any. */
+export const draftAt = g => g.drafts.find(d => CFG.birdX > d.x && CFG.birdX < d.x + CFG.draftW) ?? null
 
 /** Where a pillar's gap is centred at time t. */
 export const gapYAt = (p, t) =>
@@ -230,6 +259,8 @@ function scrollPillars(g, dt, rand) {
     }
   }
   g.pillars = g.pillars.filter(p => p.x + CFG.pillarW > DESPAWN_X)
+  for (const d of g.drafts) d.x -= dx
+  g.drafts = g.drafts.filter(d => d.x + CFG.draftW > DESPAWN_X)
   const last = g.pillars.at(-1)
   if (!last || last.x < SPAWN_X - CFG.spacing) spawn(g, rand)
 }
@@ -246,8 +277,13 @@ export function step(g, dt, rand = Math.random) {
   }
 
   // Gravity applies while playing and while the wreck falls after a crash.
+  // An updraft is moving air: it carries the bird up on top of its own
+  // flight, so flaps feel the same inside one.
   g.vy = Math.min(g.vy + CFG.gravity * dt, CFG.maxFall)
   g.y += g.vy * dt
+  const draft = g.phase === 'playing' ? draftAt(g) : null
+  g.inDraft = !!draft
+  if (draft) g.y -= draftRise(draft) * dt
   clampToSky(g)
 
   if (g.phase === 'over') {

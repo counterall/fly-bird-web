@@ -76,6 +76,8 @@ export function createSound(muted = false) {
       tone('sine', 260, 110, t, 0.22, 0.35)
       hiss('lowpass', 1200, 300, 0.7, t, 0.15, 0.2)
     },
+    // a soft rising whoosh when the bird enters an updraft
+    draft: t => hiss('bandpass', 300, 1100, 0.9, t, 0.45, 0.16),
     // a dull thud
     crash: t => {
       tone('sine', 180, 45, t, 0.35, 0.5)

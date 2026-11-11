@@ -215,6 +215,42 @@ function drawPillars(c, pillars, top, ground) {
   }
 }
 
+/**
+ * Updrafts: a faint warm column of rising air, with chevrons drifting up
+ * through it at the speed it carries the bird.
+ */
+function drawDrafts(c, g, top, ground) {
+  const w = CFG.draftW
+  for (const d of g.drafts) {
+    const band = c.createLinearGradient(d.x, 0, d.x + w, 0)
+    band.addColorStop(0, 'rgba(255, 214, 170, 0)')
+    band.addColorStop(0.5, 'rgba(255, 214, 170, 0.16)')
+    band.addColorStop(1, 'rgba(255, 214, 170, 0)')
+    c.fillStyle = band
+    c.fillRect(d.x, -top, w, ground + top)
+    // chevrons in three lanes, rising and fading in and out
+    c.strokeStyle = 'rgba(255, 236, 214, 0.55)'
+    c.lineWidth = 2
+    c.lineCap = 'round'
+    c.lineJoin = 'round'
+    const span = ground + top
+    const gapY = 70
+    for (let lane = 0; lane < 3; lane++) {
+      const x = d.x + w * (0.25 + lane * 0.25)
+      const off = (g.t * d.speed + lane * 23) % gapY
+      for (let y = ground - off; y > -top; y -= gapY) {
+        c.globalAlpha = Math.sin(Math.PI * clamp01((y + top) / span)) * (lane === 1 ? 1 : 0.6)
+        c.beginPath()
+        c.moveTo(x - 5, y + 4)
+        c.lineTo(x, y - 1)
+        c.lineTo(x + 5, y + 4)
+        c.stroke()
+      }
+    }
+    c.globalAlpha = 1
+  }
+}
+
 /** A shiny ring with a twinkle, for the bird to grab. */
 function drawTrinket(c, x, y, t) {
   const glow = c.createRadialGradient(x, y, 2, x, y, 20)
@@ -396,7 +432,7 @@ function drawLevelToggle(c, level) {
 
 const LEVEL_BLURB = {
   easy: 'Grab shiny things for extra lives',
-  hard: 'One life. The pillars drift.',
+  hard: 'One life. Drifting pillars, updrafts.',
 }
 
 /** One life icon: a feather, filled when it's a life you have. */
@@ -539,6 +575,7 @@ export function render(c, g, ui, view = { top: 0, bottom: 0, ground: GROUND }) {
   drawClouds(c, g.scroll, night)
   drawHills(c, g.scroll, 0.2, 1.7, 60, GROUND - 90, mix(HILL_FAR, HILL_FAR_NIGHT, night), ground)
   drawHills(c, g.scroll, 0.45, 4.2, 40, GROUND - 30, mix(HILL_NEAR, HILL_NEAR_NIGHT, night), ground)
+  drawDrafts(c, g, top, ground)
   drawPillars(c, g.pillars, top, ground)
   drawTrinkets(c, g)
   drawGround(c, g.scroll, ground, bottom, night)

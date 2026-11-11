@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { CFG, GROUND, LEVEL, LEVELS, MEDALS, hasTrinket, trinketPos, driftFor, gapYAt, START_Y, W, createGame, flap, step, hitsRect, gapFor, speedFor, isCalm, shiftFor, medalFor, nextMedal } from '../web/game.js'
+import { CFG, GROUND, LEVEL, LEVELS, MEDALS, hasTrinket, trinketPos, driftFor, gapYAt, draftFor, draftRise, START_Y, W, createGame, flap, step, hitsRect, gapFor, speedFor, isCalm, shiftFor, medalFor, nextMedal } from '../web/game.js'
 
 const run = (g, secs, rand = () => 0.5) => { for (let i = 0; i < secs * 60; i++) step(g, 1 / 60, rand); return g }
 
@@ -287,4 +287,47 @@ test('hard: drifting gaps move over time, stay inside the edges and keep jumps f
   step(h, 0.05)
   assert.equal(p.gapY, gapYAt(p, h.t))
   assert.notEqual(p.gapY, 300)
+})
+
+test('hard: updrafts before every 3rd pillar from the 13th, never in calm stretches', () => {
+  const on = [...Array(40).keys()].filter(n => draftFor('hard', n))
+  assert.deepEqual(on, [13, 16, 19, 25, 28, 34, 37])
+  assert.equal(draftFor('easy', 13), 0)
+  assert.equal(draftFor('hard', 13), CFG.draftSpeed)
+  assert.equal(draftFor('hard', 400 * CFG.draftEvery + CFG.draftFrom), CFG.draftSpeedMax)
+})
+
+test('an updraft carries the bird up, most at its middle, and flaps still work', () => {
+  const mid = { x: CFG.birdX - CFG.draftW / 2, speed: 150 }
+  assert.ok(Math.abs(draftRise(mid) - 150) < 1e-9)
+  assert.ok(draftRise({ x: CFG.birdX - CFG.draftW * 0.1, speed: 150 }) < 60)
+  assert.equal(draftRise({ x: CFG.birdX + 1, speed: 150 }), 0)
+
+  const still = flap(createGame('hard'))
+  const lifted = flap(createGame('hard'))
+  for (const g of [still, lifted]) { g.y = 300; g.vy = 0; g.pillars = [] }
+  lifted.drafts = [mid]
+  step(still, 1 / 60)
+  step(lifted, 1 / 60)
+  assert.ok(lifted.inDraft && !still.inDraft)
+  assert.equal(lifted.vy, still.vy) // the air moves the bird; its own speed is untouched
+  assert.ok(lifted.y < still.y)
+})
+
+test('spawned updrafts sit between pillars and scroll away with them', () => {
+  const g = flap(createGame('hard'))
+  g.spawned = CFG.draftFrom
+  g.pillars = [{ x: W + 10 - CFG.spacing - 1, baseY: 300, gapY: 300, gap: 400, passed: true, trinket: null, drift: 0 }]
+  g.y = 300
+  step(g, 1 / 60)
+  assert.equal(g.drafts.length, 1)
+  const [a, b] = g.pillars
+  const d = g.drafts[0]
+  assert.ok(d.x > a.x + CFG.pillarW && d.x + CFG.draftW < b.x, 'between the two pillars')
+  const x0 = d.x
+  step(g, 1 / 60)
+  assert.ok(g.drafts[0].x < x0)
+  g.drafts[0].x = -CFG.draftW - 20
+  step(g, 1 / 60)
+  assert.equal(g.drafts.length, 0)
 })
