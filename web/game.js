@@ -23,15 +23,21 @@ export const CFG = Object.freeze({
   birdX: 110,
   birdR: 12, // collision radius of the bird's body (the tail doesn't collide)
   edge: 90, // min distance of a gap's centre from the top / the ground
+  shift: 110, // max change in gap height from one pillar to the next…
+  shiftPerPoint: 4, // …widening with the score (the edges cap it)
+  calmEvery: 10, // every this many pillars, a calm stretch…
+  calmLength: 3, // …of this many pillars…
+  calmShift: 24, // …whose gaps barely move
   restartDelay: 0.6, // s after crashing before a flap restarts
 })
 
 /**
  * A fresh game. `ceil` / `floor` are the top of the visible sky and the ground
- * line; main.js moves them out on screens taller than 2:3.
+ * line; main.js moves them out on screens taller than 2:3. `spawned` counts
+ * pillars so far.
  */
 export function createGame() {
-  return { mode: 'ready', t: 0, y: START_Y, vy: 0, pillars: [], score: 0, scroll: 0, overAt: 0, flapAt: -1, ceil: 0, floor: GROUND }
+  return { mode: 'ready', t: 0, y: START_Y, vy: 0, pillars: [], score: 0, scroll: 0, overAt: 0, flapAt: -1, spawned: 0, ceil: 0, floor: GROUND }
 }
 
 export const speedFor = score => CFG.speed + Math.min(score * CFG.speedPerPoint, CFG.speedCap)
@@ -49,11 +55,20 @@ export function flap(g) {
   return g
 }
 
+/** Pillars that open a calm stretch: a breather after every `calmEvery`. */
+export const isCalm = n => n >= CFG.calmEvery && n % CFG.calmEvery < CFG.calmLength
+
+/** How far pillar n's gap may move from the previous one. */
+export const shiftFor = (n, score) => isCalm(n) ? CFG.calmShift : CFG.shift + score * CFG.shiftPerPoint
+
 function spawn(g, rand) {
   const gap = gapFor(g.score)
-  const lo = CFG.edge + gap / 2
-  const hi = GROUND - CFG.edge - gap / 2
+  const prev = g.pillars.at(-1)?.gapY ?? START_Y
+  const shift = shiftFor(g.spawned, g.score)
+  const lo = Math.max(CFG.edge + gap / 2, prev - shift)
+  const hi = Math.min(GROUND - CFG.edge - gap / 2, prev + shift)
   g.pillars.push({ x: SPAWN_X, gapY: lo + rand() * (hi - lo), gap, passed: false })
+  g.spawned++
 }
 
 /** Closest-point test between a circle and an axis-aligned rect. */
