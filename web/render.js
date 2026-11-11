@@ -396,7 +396,7 @@ function drawLevelToggle(c, level) {
 
 const LEVEL_BLURB = {
   easy: 'Grab shiny things for extra lives',
-  hard: 'One life. No pickups.',
+  hard: 'One life. The pillars drift.',
 }
 
 /** One life icon: a feather, filled when it's a life you have. */

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { CFG, GROUND, LEVEL, LEVELS, MEDALS, hasTrinket, trinketPos, START_Y, W, createGame, flap, step, hitsRect, gapFor, speedFor, isCalm, shiftFor, medalFor, nextMedal } from '../web/game.js'
+import { CFG, GROUND, LEVEL, LEVELS, MEDALS, hasTrinket, trinketPos, driftFor, gapYAt, START_Y, W, createGame, flap, step, hitsRect, gapFor, speedFor, isCalm, shiftFor, medalFor, nextMedal } from '../web/game.js'
 
 const run = (g, secs, rand = () => 0.5) => { for (let i = 0; i < secs * 60; i++) step(g, 1 / 60, rand); return g }
 
@@ -250,4 +250,41 @@ test('hard: one life, so the first hit ends the run', () => {
   g.pillars = [wall()]
   step(g, 1 / 60)
   assert.equal(g.phase, 'over')
+})
+
+test('hard: pillars drift from the 6th, more and more, but not in calm stretches', () => {
+  assert.equal(driftFor('easy', 30), 0)
+  assert.equal(driftFor('hard', CFG.driftFrom - 1), 0)
+  assert.equal(driftFor('hard', CFG.driftFrom), CFG.drift)
+  assert.equal(driftFor('hard', 7), CFG.drift + 2 * CFG.driftPerPillar)
+  assert.equal(driftFor('hard', 10), 0) // calm
+  assert.equal(driftFor('hard', 99), CFG.driftMax)
+})
+
+test('hard: drifting gaps move over time, stay inside the edges and keep jumps fair', () => {
+  const g = flap(createGame('hard'))
+  let prev = START_Y
+  for (let n = 0; n < 120; n++) {
+    g.pillars = [{ x: W + 10 - CFG.spacing - 1, baseY: prev, gapY: prev, gap: CFG.gap, passed: true, trinket: null, drift: 0 }]
+    Object.assign(g, { spawned: n, score: n, y: 300, vy: 0, phase: 'playing' })
+    step(g, 1 / 60, () => (n % 2 ? 0 : 0.999))
+    const p = g.pillars.at(-1)
+    const lo = CFG.edge + p.gap / 2
+    const hi = GROUND - CFG.edge - p.gap / 2
+    assert.ok(p.baseY - p.drift >= lo - 1e-9 && p.baseY + p.drift <= hi + 1e-9, `pillar ${n} swings past an edge`)
+    const allowed = Math.max(CFG.calmShift, shiftFor(n, n) - driftFor('hard', n))
+    assert.ok(Math.abs(p.baseY - prev) <= allowed + 1e-9, `pillar ${n}: ${prev} -> ${p.baseY}`)
+    if (n >= CFG.driftFrom && !isCalm(n)) assert.ok(p.drift > 0, `pillar ${n} should drift`)
+    prev = p.baseY
+  }
+  // a drifting gap really moves, and the model follows it
+  const p = { x: 300, baseY: 300, gapY: 300, gap: 150, passed: false, trinket: null, drift: 40, phase: 0 }
+  assert.equal(gapYAt(p, 0), 300)
+  assert.ok(Math.abs(gapYAt(p, CFG.driftPeriod / 4) - 340) < 1e-9)
+  const h = flap(createGame('hard'))
+  h.pillars = [p]
+  h.y = 200
+  step(h, 0.05)
+  assert.equal(p.gapY, gapYAt(p, h.t))
+  assert.notEqual(p.gapY, 300)
 })

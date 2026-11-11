@@ -34,6 +34,11 @@ export const CFG = Object.freeze({
   trinketEvery: 7, // a trinket rides on every 7th pillar…
   trinketFirst: 4, // …starting with pillar 4 (counting from 0)
   ghostTime: 1.5, // s a hit bird passes through pillars before it can be hit again
+  driftFrom: 5, // on levels with drifting pillars, gaps drift from pillar 5 (counting from 0)…
+  drift: 16, // …by ± this many px at first…
+  driftPerPillar: 1.5, // …widening with each pillar…
+  driftMax: 50, // …up to this
+  driftPeriod: 3, // s for one full up-and-down
 })
 
 /**
@@ -41,8 +46,8 @@ export const CFG = Object.freeze({
  * `lives`: lives at the start. `maxLives`: how many trinkets can stack up to.
  */
 export const LEVEL = Object.freeze({
-  easy: Object.freeze({ lives: 1, maxLives: 3, trinkets: true }),
-  hard: Object.freeze({ lives: 1, maxLives: 1, trinkets: false }),
+  easy: Object.freeze({ lives: 1, maxLives: 3, trinkets: true, drifting: false }),
+  hard: Object.freeze({ lives: 1, maxLives: 1, trinkets: false, drifting: true }),
 })
 export const LEVELS = Object.freeze(Object.keys(LEVEL))
 
@@ -105,18 +110,44 @@ export const trinketPos = p => ({
   y: p.gapY + p.trinket.side * (p.gap / 2 - CFG.trinketInset),
 })
 
+/** How far pillar n's gap drifts up and down (0: it stays put). Calm stretches stay put too. */
+export function driftFor(level, n) {
+  if (!LEVEL[level].drifting || n < CFG.driftFrom || isCalm(n)) return 0
+  return Math.min(CFG.driftMax, CFG.drift + (n - CFG.driftFrom) * CFG.driftPerPillar)
+}
+
+/**
+ * A pillar's gap is centred on `baseY`; a drifting one (`drift` > 0) swings
+ * ± drift around it, and `gapY` is where it is right now.
+ */
 function spawn(g, rand) {
   const gap = gapFor(g.score)
-  const prev = g.pillars.at(-1)?.gapY ?? START_Y
-  const shift = shiftFor(g.spawned, g.score)
-  const lo = Math.max(CFG.edge + gap / 2, prev - shift)
-  const hi = Math.min(GROUND - CFG.edge - gap / 2, prev + shift)
-  const p = { x: SPAWN_X, gapY: lo + rand() * (hi - lo), gap, passed: false, trinket: null }
+  const edgeLo = CFG.edge + gap / 2
+  const edgeHi = GROUND - CFG.edge - gap / 2
+  const prev = g.pillars.at(-1)?.baseY ?? g.pillars.at(-1)?.gapY ?? START_Y
+  // a drifting gap leaves room to swing inside the edges, and its drift eats
+  // into the allowed jump, so the worst case stays fair
+  const drift = Math.min(driftFor(g.level, g.spawned), (edgeHi - edgeLo) / 2)
+  const shift = Math.max(CFG.calmShift, shiftFor(g.spawned, g.score) - drift)
+  const lo = Math.max(edgeLo + drift, prev - shift)
+  const hi = Math.min(edgeHi - drift, prev + shift)
+  // lo > hi can't happen with the shipped CFG (shift - drift > drift), but
+  // stay safe if it's retuned: then sit as close to prev as the edges allow
+  const baseY = lo <= hi ? lo + rand() * (hi - lo) : Math.min(edgeHi - drift, Math.max(edgeLo + drift, prev))
+  const p = { x: SPAWN_X, baseY, gapY: baseY, gap, passed: false, trinket: null, drift, phase: 0 }
+  if (drift > 0) {
+    p.phase = rand() * Math.PI * 2
+    p.gapY = gapYAt(p, g.t)
+  }
   // side: -1 near the top cap, 1 near the bottom one. takenAt: when collected.
   if (hasTrinket(g, g.spawned)) p.trinket = { side: rand() < 0.5 ? -1 : 1, takenAt: -1 }
   g.pillars.push(p)
   g.spawned++
 }
+
+/** Where a pillar's gap is centred at time t. */
+export const gapYAt = (p, t) =>
+  p.drift ? p.baseY + p.drift * Math.sin(p.phase + (t * 2 * Math.PI) / CFG.driftPeriod) : p.gapY
 
 /** Closest-point test between a circle and an axis-aligned rect. */
 export function hitsRect(cx, cy, r, x, y, w, h) {
@@ -191,6 +222,7 @@ function scrollPillars(g, dt, rand) {
   g.dist += dx
   for (const p of g.pillars) {
     p.x -= dx
+    p.gapY = gapYAt(p, g.t)
     if (!p.passed && p.x + CFG.pillarW < CFG.birdX - CFG.birdR) {
       p.passed = true
       g.score++
