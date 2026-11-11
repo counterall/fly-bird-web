@@ -1,0 +1,9 @@
+# Updraft
+
+A one-button browser game: flap a magpie through gaps between dusk-lit pillars.
+
+- **Controls:** Space / ↑ / W / click / tap to flap, and P / Esc to pause.
+- **Run locally:** run `npm start`, then open http://localhost:8080.
+- **Tests:** `npm test`.
+
+Every push to `main` deploys `web/` to GitHub Pages through `.github/workflows/pages.yml`.

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { CFG, GROUND, createGame, flap, step, hitsRect, gapFor } from '../src/game.js'
+import { CFG, GROUND, createGame, flap, step, hitsRect, gapFor } from '../web/game.js'
 
 const run = (g, secs, rand = () => 0.5) => { for (let i = 0; i < secs * 60; i++) step(g, 1 / 60, rand); return g }
 
@@ -19,14 +19,14 @@ test('first flap starts the game and lifts the plane', () => {
 test('without input the plane hits the ground', () => {
   const g = run(flap(createGame()), 3)
   assert.equal(g.mode, 'over')
-  assert.equal(g.y, GROUND - CFG.planeR)
+  assert.equal(g.y, GROUND - CFG.birdR)
 })
 
 test('flying through gaps scores points', () => {
   // gaps always centred (rand = 0.5); flap whenever below the gap centre
   let g = flap(createGame())
   for (let i = 0; i < 60 * 20; i++) {
-    const next = g.pillars.find(p => p.x + CFG.pillarW > CFG.planeX - CFG.planeR)
+    const next = g.pillars.find(p => p.x + CFG.pillarW > CFG.birdX - CFG.birdR)
     const target = next ? next.gapY + 10 : 300
     if (g.y > target && g.vy > 0) g = flap(g)
     step(g, 1 / 60, () => 0.5)
@@ -37,7 +37,7 @@ test('flying through gaps scores points', () => {
 
 test('hitting a pillar ends the run', () => {
   const g = flap(createGame())
-  g.pillars.push({ x: CFG.planeX - 5, gapY: 100, gap: 120, passed: false })
+  g.pillars.push({ x: CFG.birdX - 5, gapY: 100, gap: 120, passed: false })
   step(g, 1 / 60)
   assert.equal(g.mode, 'over')
 })

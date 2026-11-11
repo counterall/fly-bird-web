@@ -1,40 +1,12 @@
 {
-  "name": "dsh-updraft",
-  "version": "0.1.0",
-  "description": "DeepSeek Harness plugin: Updraft, a one-button paper-plane game played in a sidebar panel.",
+  "name": "updraft",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Updraft: a one-button browser game. Flap a magpie through gaps between dusk-lit pillars.",
   "type": "module",
-  "main": "lib/index.js",
-  "exports": {
-    ".": "./lib/index.js",
-    "./client": "./lib/client.js",
-    "./package.json": "./package.json"
-  },
-  "files": [
-    "lib/index.js",
-    "lib/client.js",
-    "cordis.patch.yml"
-  ],
   "scripts": {
-    "build": "node scripts/build.mjs",
+    "start": "python3 -m http.server 8080 --directory web",
     "test": "node --test test/*.test.js"
   },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    },
-    "client": {
-      "platform": "web",
-      "inject": [
-        "@deepseek-ai/dsh-client-connection",
-        "@deepseek-ai/dsh-client-ui-sidebar"
-      ]
-    }
-  },
-  "engines": {
-    "dsh": ">=0.2.1-rc.2"
-  },
-  "license": "MIT",
-  "devDependencies": {
-    "esbuild": "0.25.10"
-  }
+  "license": "MIT"
 }
