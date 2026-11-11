@@ -24,6 +24,7 @@ There is no build step and there are no runtime dependencies. `web/` is served a
 | `web/sound.js` | Sound effects synthesised with WebAudio (no audio files). Audio only starts after a user gesture, so input handlers call `unlock()`. |
 | `web/game.js` | Pure game model (physics, pillars, gap placement, scoring, medals, collisions) on a fixed 400×600 logical field. No DOM. Tuning lives in `CFG`. |
 | `test/game.test.js` | `node --test` for the game model. |
+| `test/render.test.js` | Renderer checks: draws a frame into a recording stand-in for the canvas context and looks at what was drawn. |
 | `test/assets.test.js` | Checks that every local module import, and the entry script in `index.html`, carries `?v=dev`. |
 | `.github/workflows/pages.yml` | On every push to `main`: run the tests, stamp module URLs with the commit, then deploy `web/` to GitHub Pages. |
 
