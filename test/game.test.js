@@ -141,14 +141,18 @@ test('calm stretches follow every tenth pillar', () => {
 })
 
 test('medals by score', () => {
-  assert.equal(medalFor(9), null)
-  assert.equal(medalFor(10).name, 'bronze')
-  assert.equal(medalFor(49).name, 'silver')
+  assert.equal(medalFor(49), null)
+  assert.equal(medalFor(50).name, 'bronze')
+  assert.equal(medalFor(149).name, 'bronze')
+  assert.equal(medalFor(150).name, 'silver')
+  assert.equal(medalFor(499).name, 'silver')
   assert.equal(medalFor(500).name, 'gold')
+  assert.equal(medalFor(5000).name, 'gold')
   assert.equal(nextMedal(0).name, 'bronze')
-  assert.equal(nextMedal(25).name, 'gold')
-  assert.equal(nextMedal(50), null)
-  assert.deepEqual(MEDALS.map(m => m.score), [10, 25, 50])
+  assert.equal(nextMedal(50).name, 'silver')
+  assert.equal(nextMedal(150).name, 'gold')
+  assert.equal(nextMedal(500), null)
+  assert.deepEqual(MEDALS.map(m => m.score), [50, 150, 500])
 })
 
 test('distance flown grows only while playing and records when points score', () => {
