@@ -24,7 +24,8 @@ There is no build step and there are no runtime dependencies. `web/` is served a
 | `web/sound.js` | Sound effects synthesised with WebAudio (no audio files). Audio only starts after a user gesture, so input handlers call `unlock()`. |
 | `web/game.js` | Pure game model (physics, pillars, gap placement, scoring, medals, collisions) on a fixed 400×600 logical field. No DOM. Tuning lives in `CFG`. |
 | `test/game.test.js` | `node --test` for the game model. |
-| `.github/workflows/pages.yml` | On every push to `main`: run the tests, then deploy `web/` to GitHub Pages. |
+| `test/assets.test.js` | Checks that every local module import, and the entry script in `index.html`, carries `?v=dev`. |
+| `.github/workflows/pages.yml` | On every push to `main`: run the tests, stamp module URLs with the commit, then deploy `web/` to GitHub Pages. |
 
 ## Commands
 
@@ -36,6 +37,7 @@ npm start    # serve web/ at http://localhost:8080, with caching off (tools/serv
 ## Notes
 
 - Files must be served over HTTP, because ES modules don't load from `file://`.
+- **Cache busting:** GitHub Pages lets browsers cache each file for 10 minutes, so after a deploy a browser could mix old and new modules. Every local import, and the `<script>` in `index.html`, ends in `?v=dev`. The Pages workflow replaces `dev` with the commit's short SHA, so each deploy gets fresh URLs. When you add a module, import it with `?v=dev`; `test/assets.test.js` fails otherwise.
 - The renderer draws in logical units: `main.js` sets the transform to scale 400×600 to the canvas's device pixels.
 - Visual sizes, like the magpie's `MAGPIE_SCALE` in `render.js`, are independent of the collision radius `CFG.birdR`. Only the body collides, not the tail.
 - **Phase vs level:** `g.phase` is the run's state (`ready` / `playing` / `over`), and `g.level` is the difficulty (`easy` / `normal` / `hard`, see `LEVEL` and `LEVELS`). The toggle, its hit-testing and the keys work for any number of levels. A run keeps its level, and the level can only change on the title screen.

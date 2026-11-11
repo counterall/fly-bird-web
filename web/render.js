@@ -1,7 +1,7 @@
 // Canvas renderer for Updraft. Draws one frame of a game from game.js onto a
 // 2D context already scaled to the W×H logical playfield.
-import { CFG, GROUND, H, LEVEL, LEVELS, W, medalFor, nextMedal, trinketPos } from './game.js'
-import { paintMagpie } from './magpie.js'
+import { CFG, GROUND, H, LEVEL, LEVELS, W, medalFor, nextMedal, trinketPos } from './game.js?v=dev'
+import { paintMagpie } from './magpie.js?v=dev'
 
 // ── palette ────────────────────────────────────────────────────────────────
 // The sky turns from dusk to night over a run; *_NIGHT is the far end.

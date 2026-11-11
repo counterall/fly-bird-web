@@ -1,7 +1,7 @@
 // Entry point: sizes the canvas to the window, runs the game loop and input.
-import { GROUND, H, LEVELS, W, createGame, flap, medalFor, step } from './game.js'
-import { LEVEL_TOGGLE, MUTE_BUTTON, render } from './render.js'
-import { createSound } from './sound.js'
+import { GROUND, H, LEVELS, W, createGame, flap, medalFor, step } from './game.js?v=dev'
+import { LEVEL_TOGGLE, MUTE_BUTTON, render } from './render.js?v=dev'
+import { createSound } from './sound.js?v=dev'
 
 const LS_BEST = level => `updraft:best:${level}`
 const LS_BEST_OLD = 'updraft:best' // before levels: the game that is now normal

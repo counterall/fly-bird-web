@@ -26,6 +26,14 @@ jobs:
         with:
           node-version: 22
       - run: npm test
+      # Give every module a URL unique to this commit, so browsers holding
+      # cached files from the last deploy can't mix old and new modules.
+      - name: Stamp module URLs with the commit
+        run: |
+          v="${GITHUB_SHA::8}"
+          sed -i "s/?v=dev/?v=$v/g" web/*.html web/*.js
+          if grep -n '?v=dev' web/*.html web/*.js; then echo 'unstamped ?v=dev left'; exit 1; fi
+          grep -c "?v=$v" web/*.html web/*.js
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
