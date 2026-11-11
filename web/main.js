@@ -19,6 +19,12 @@ let paused = false
 let touch = matchMedia('(pointer: coarse)').matches
 let last = performance.now()
 
+function saveBest(score) {
+  if (score <= best) return
+  best = score
+  writeBest(best)
+}
+
 // Extra logical sky above / ground below the 400×600 playfield, for screens
 // taller than 2:3. Gameplay happens in the same playfield on every device.
 const view = { top: 0, bottom: 0, ground: GROUND }
@@ -67,6 +73,11 @@ function togglePause() {
   last = performance.now()
 }
 
+// Losing focus mid-run shouldn't cost the player their run.
+function autoPause() {
+  if (g.mode === 'playing') paused = true
+}
+
 function frame(now) {
   const dt = (now - last) / 1000
   last = now
@@ -75,11 +86,10 @@ function frame(now) {
   if (!paused) {
     const was = g.mode
     step(g, dt)
-    if (was === 'playing' && g.mode === 'over' && g.score > best) {
-      best = g.score
-      writeBest(best)
-    }
+    if (was === 'playing' && g.mode === 'over') saveBest(g.score)
   }
+  // Match the backing store to the canvas's device pixels, then map the
+  // logical field (plus any extra sky / ground) onto it.
   const dpr = devicePixelRatio || 1
   const pw = Math.round(canvas.clientWidth * dpr)
   const ph = Math.round(canvas.clientHeight * dpr)
@@ -104,5 +114,5 @@ addEventListener('pointerdown', e => {
   touch = e.pointerType === 'touch'
   press()
 }, { passive: false })
-addEventListener('blur', () => { if (g.mode === 'playing') paused = true })
-document.addEventListener('visibilitychange', () => { if (document.hidden && g.mode === 'playing') paused = true })
+addEventListener('blur', autoPause)
+document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause() })
