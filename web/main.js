@@ -1,20 +1,24 @@
 // Entry point: sizes the canvas to the window, runs the game loop and input.
-import { GROUND, H, W, createGame, flap, step } from './game.js'
-import { render } from './render.js'
+import { GROUND, H, W, createGame, flap, medalFor, step } from './game.js'
+import { MUTE_BUTTON, render } from './render.js'
+import { createSound } from './sound.js'
 
 const LS_BEST = 'updraft:best'
+const LS_MUTED = 'updraft:muted'
 
-function readBest() {
-  try { return Number.parseInt(localStorage.getItem(LS_BEST) ?? '0', 10) || 0 } catch { return 0 }
+// localStorage can be unavailable (private mode, blocked site data).
+function load(key) {
+  try { return localStorage.getItem(key) } catch { return null }
 }
-function writeBest(v) {
-  try { localStorage.setItem(LS_BEST, String(v)) } catch {}
+function store(key, v) {
+  try { localStorage.setItem(key, String(v)) } catch {}
 }
 
 const canvas = document.getElementById('game')
 const c = canvas.getContext('2d')
 let g = createGame()
-let best = readBest()
+let best = Number.parseInt(load(LS_BEST) ?? '0', 10) || 0
+const sound = createSound(load(LS_MUTED) === '1')
 let paused = false
 let touch = matchMedia('(pointer: coarse)').matches
 let last = performance.now()
@@ -22,7 +26,11 @@ let last = performance.now()
 function saveBest(score) {
   if (score <= best) return
   best = score
-  writeBest(best)
+  store(LS_BEST, best)
+}
+
+function toggleMute() {
+  store(LS_MUTED, sound.toggle() ? '1' : '0')
 }
 
 // Extra logical sky above / ground below the 400×600 playfield, for screens
@@ -65,6 +73,7 @@ fit()
 function press() {
   if (paused) { paused = false; last = performance.now(); return }
   g = flap(g)
+  if (g.mode === 'playing' && g.flapAt === g.t) sound.play('flap')
 }
 
 function togglePause() {
@@ -85,8 +94,13 @@ function frame(now) {
   g.floor = view.ground
   if (!paused) {
     const was = g.mode
+    const score = g.score
     step(g, dt)
-    if (was === 'playing' && g.mode === 'over') saveBest(g.score)
+    if (g.score > score) sound.play(medalFor(g.score)?.score === g.score ? 'medal' : 'score')
+    if (was === 'playing' && g.mode === 'over') {
+      sound.play('crash')
+      saveBest(g.score)
+    }
   }
   // Match the backing store to the canvas's device pixels, then map the
   // logical field (plus any extra sky / ground) onto it.
@@ -97,22 +111,37 @@ function frame(now) {
   const sx = pw / W
   const sy = ph / (H + view.top + view.bottom)
   c.setTransform(sx, 0, 0, sy, 0, view.top * sy)
-  render(c, g, { best, paused, touch }, view)
+  render(c, g, { best, paused, touch, muted: sound.muted }, view)
   requestAnimationFrame(frame)
 }
 requestAnimationFrame(frame)
 
+/** Is the page point (clientX, clientY) on the mute button? */
+function onMuteButton(clientX, clientY) {
+  const r = canvas.getBoundingClientRect()
+  const x = ((clientX - r.left) / r.width) * W
+  const y = ((clientY - r.top) / r.height) * (H + view.top + view.bottom) - view.top
+  return Math.hypot(x - MUTE_BUTTON.x, y - MUTE_BUTTON.y) <= MUTE_BUTTON.r
+}
+
 addEventListener('keydown', e => {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return
+  sound.unlock()
   if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); touch = false; press() }
   else if (e.code === 'KeyP' || e.code === 'Escape') { e.preventDefault(); togglePause() }
+  else if (e.code === 'KeyM') { e.preventDefault(); toggleMute() }
 })
-// Anywhere on the page counts as a flap, so phones don't need to aim at the canvas.
+// Anywhere on the page counts as a flap, so phones don't need to aim at the
+// canvas; only the mute button is excluded.
 addEventListener('pointerdown', e => {
   if (e.button > 0) return
   e.preventDefault()
   touch = e.pointerType === 'touch'
-  press()
+  sound.unlock()
+  if (onMuteButton(e.clientX, e.clientY)) toggleMute()
+  else press()
 }, { passive: false })
+// Mobile browsers only let audio start on pointerup / touchend, not pointerdown.
+addEventListener('pointerup', () => sound.unlock())
 addEventListener('blur', autoPause)
 document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause() })

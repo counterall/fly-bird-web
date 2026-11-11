@@ -46,6 +46,9 @@ const MAGPIE_SCALE = 1.3 // visual only; collisions use CFG.birdR
 const NIGHT_DIST = 45 * CFG.spacing // distance flown by full night: ~45 points
 const MEDAL_TOAST = 1.6 // s the "medal!" message shows after earning one
 
+/** The sound toggle, top-right, in logical units; main.js hit-tests it. */
+export const MUTE_BUTTON = { x: W - 30, y: 30, r: 22 }
+
 // ── colour helpers ─────────────────────────────────────────────────────────
 const rgb = hex => [1, 3, 5].map(i => Number.parseInt(hex.slice(i, i + 2), 16))
 const lerp = (a, b, t) => a + (b - a) * t
@@ -304,7 +307,7 @@ function drawTitle(c, best, touch) {
     const medal = medalFor(best)
     if (medal) drawMedal(c, W / 2 - w / 2 - 16, 232, 9, medal.name)
   }
-  if (!touch) text(c, 'P or Esc to pause', W / 2, 300, 13, 'rgba(255, 248, 238, 0.7)')
+  if (!touch) text(c, 'P to pause · M for sound', W / 2, 300, 13, 'rgba(255, 248, 238, 0.7)')
 }
 
 /** "Bronze medal!" under the score, just after a run earns a medal. */
@@ -338,6 +341,38 @@ function drawGameOver(c, g, best, touch) {
   if (since > CFG.restartDelay) text(c, touch ? 'Tap to fly again' : 'Space to fly again', W / 2, 364, 14)
 }
 
+/** Speaker icon, crossed out when muted. */
+function drawMuteButton(c, muted) {
+  const { x, y, r } = MUTE_BUTTON
+  c.save()
+  c.globalAlpha = 0.75
+  c.fillStyle = 'rgba(30, 22, 60, 0.45)'
+  c.beginPath()
+  c.arc(x, y, r * 0.75, 0, Math.PI * 2)
+  c.fill()
+  c.fillStyle = INK
+  c.strokeStyle = INK
+  c.lineWidth = 1.8
+  c.lineCap = 'round'
+  // speaker
+  c.beginPath()
+  c.moveTo(x - 8, y - 3); c.lineTo(x - 4, y - 3); c.lineTo(x + 1, y - 8)
+  c.lineTo(x + 1, y + 8); c.lineTo(x - 4, y + 3); c.lineTo(x - 8, y + 3)
+  c.closePath()
+  c.fill()
+  c.beginPath()
+  if (muted) {
+    c.moveTo(x + 4, y - 4); c.lineTo(x + 10, y + 4)
+    c.moveTo(x + 10, y - 4); c.lineTo(x + 4, y + 4)
+  } else {
+    c.arc(x + 2, y, 5, -0.9, 0.9)
+    c.moveTo(x + 2 + 9 * Math.cos(-0.9), y + 9 * Math.sin(-0.9))
+    c.arc(x + 2, y, 9, -0.9, 0.9)
+  }
+  c.stroke()
+  c.restore()
+}
+
 function drawPaused(c, top, bottom, touch) {
   c.fillStyle = DIM
   c.fillRect(0, -top, W, bottom + top)
@@ -346,13 +381,13 @@ function drawPaused(c, top, bottom, touch) {
 }
 
 /**
- * Draw one frame. `ui` is { best, paused, touch }. `view.top` /
+ * Draw one frame. `ui` is { best, paused, touch, muted }. `view.top` /
  * `view.bottom` are extra logical pixels shown above y = 0 and below y = H on
  * screens taller than 2:3 (phones), and `view.ground` is the ground line
  * there. The playfield itself is unchanged; the sky and ground just extend.
  */
 export function render(c, g, ui, view = { top: 0, bottom: 0, ground: GROUND }) {
-  const { best, paused, touch } = ui
+  const { best, paused, touch, muted } = ui
   const top = view.top
   const bottom = H + view.bottom
   const ground = view.ground
@@ -376,6 +411,7 @@ export function render(c, g, ui, view = { top: 0, bottom: 0, ground: GROUND }) {
   else drawGameOver(c, g, best, touch)
 
   if (paused) drawPaused(c, top, bottom, touch)
+  drawMuteButton(c, muted)
 }
 
 // ── app icon ───────────────────────────────────────────────────────────────
