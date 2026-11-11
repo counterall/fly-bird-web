@@ -16,6 +16,7 @@ There is no build step and there are no runtime dependencies. `web/` is served a
 |---|---|
 | `web/index.html` | Page shell: the full-window canvas, page styles, and the icon and manifest links. |
 | `web/*.png`, `web/manifest.webmanifest` | Home-screen icons (iOS uses `apple-touch-icon.png`, and ignores SVG) and the web app manifest. The PNGs are generated: see Notes. |
+| `tools/serve.py` | Dev server for `npm start`: serves `web/` with `Cache-Control: no-store`, so the browser never mixes old and new modules after an edit. |
 | `tools/icons.html` | Icon generator: draws each icon with `drawIcon()` from `web/render.js`. |
 | `web/main.js` | Entry point: fits the 2:3 playfield to the window, runs the rAF loop, handles input, triggers sounds, saves the best score and mute setting. |
 | `web/render.js` | Canvas renderer: sky, parallax hills, pillars, the ground, the magpie's flight pose (wing beat, tilt), the overlays, and `drawIcon()`. Colours are at the top. |
@@ -29,7 +30,7 @@ There is no build step and there are no runtime dependencies. `web/` is served a
 
 ```sh
 npm test     # node --test, no install needed
-npm start    # serve web/ at http://localhost:8080
+npm start    # serve web/ at http://localhost:8080, with caching off (tools/serve.py)
 ```
 
 ## Notes

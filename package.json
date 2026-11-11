@@ -5,7 +5,7 @@
   "description": "Updraft: a one-button browser game. Flap a magpie through gaps between dusk-lit pillars.",
   "type": "module",
   "scripts": {
-    "start": "python3 -m http.server 8080 --directory web",
+    "start": "python3 tools/serve.py 8080",
     "test": "node --test test/*.test.js"
   },
   "license": "MIT"
