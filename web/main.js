@@ -108,8 +108,11 @@ function frame(now) {
   if (!paused) {
     const was = g.phase
     const score = g.score
+    const lives = g.lives
     step(g, dt)
     if (g.score > score) sound.play(medalFor(g.score)?.score === g.score ? 'medal' : 'score')
+    if (g.lives > lives) sound.play('trinket')
+    if (g.lives < lives && g.phase === 'playing') sound.play('hurt')
     if (was === 'playing' && g.phase === 'over') {
       sound.play('crash')
       saveBest(g.level, g.score)

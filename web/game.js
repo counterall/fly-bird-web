@@ -29,10 +29,22 @@ export const CFG = Object.freeze({
   calmLength: 3, // …of this many pillars…
   calmShift: 24, // …whose gaps barely move
   restartDelay: 0.6, // s after crashing before a flap restarts
+  trinketR: 9, // pickup radius of a trinket (plus the bird's birdR)
+  trinketInset: 32, // a trinket sits this far inside the gap from a pillar's cap
+  trinketEvery: 7, // a trinket rides on every 7th pillar…
+  trinketFirst: 4, // …starting with pillar 4 (counting from 0)
+  ghostTime: 1.5, // s a hit bird passes through pillars before it can be hit again
 })
 
-/** Difficulty levels. Each run is played at one; it never changes mid-run. */
-export const LEVELS = Object.freeze(['easy', 'hard'])
+/**
+ * Difficulty levels. Each run is played at one; it never changes mid-run.
+ * `lives`: lives at the start. `maxLives`: how many trinkets can stack up to.
+ */
+export const LEVEL = Object.freeze({
+  easy: Object.freeze({ lives: 1, maxLives: 3, trinkets: true }),
+  hard: Object.freeze({ lives: 1, maxLives: 1, trinkets: false }),
+})
+export const LEVELS = Object.freeze(Object.keys(LEVEL))
 
 /** Medals for a run, lowest first. */
 export const MEDALS = Object.freeze([
@@ -44,14 +56,21 @@ export const medalFor = score => MEDALS.findLast(m => score >= m.score) ?? null
 export const nextMedal = score => MEDALS.find(m => score < m.score) ?? null
 
 /**
- * A fresh game at `level` (one of LEVELS). `phase` is 'ready' (hovering on
- * the title screen), 'playing' or 'over'. `ceil` / `floor` are the top of the visible sky and the ground
- * line; main.js moves them out on screens taller than 2:3. `spawned` counts
- * pillars so far, `dist` is the distance flown, `scoredAt` the time of the
- * last point.
+ * A fresh game at `level` (one of LEVELS).
+ * - `phase`: 'ready' (hovering on the title screen), 'playing' or 'over'.
+ * - `ceil` / `floor`: the top of the visible sky and the ground line; main.js
+ *   moves them out on screens taller than 2:3.
+ * - `spawned`: pillars so far. `dist`: distance flown. `scoredAt`: time of the
+ *   last point.
+ * - `lives`: lives left, including the current one. After a hit that isn't the
+ *   last, the bird is a `ghost` (passes through pillars) from `hurtAt` on.
  */
 export function createGame(level = 'easy') {
-  return { level, phase: 'ready', t: 0, y: START_Y, vy: 0, pillars: [], score: 0, scroll: 0, overAt: 0, flapAt: -1, scoredAt: -1, spawned: 0, dist: 0, ceil: 0, floor: GROUND }
+  return {
+    level, phase: 'ready', t: 0, y: START_Y, vy: 0, pillars: [], score: 0, scroll: 0,
+    overAt: 0, flapAt: -1, scoredAt: -1, spawned: 0, dist: 0, ceil: 0, floor: GROUND,
+    lives: LEVEL[level].lives, ghost: false, hurtAt: -1,
+  }
 }
 
 export const speedFor = score => CFG.speed + Math.min(score * CFG.speedPerPoint, CFG.speedCap)
@@ -75,13 +94,27 @@ export const isCalm = n => n >= CFG.calmEvery && n % CFG.calmEvery < CFG.calmLen
 /** How far pillar n's gap may move from the previous one. */
 export const shiftFor = (n, score) => isCalm(n) ? CFG.calmShift : CFG.shift + score * CFG.shiftPerPoint
 
+/** Does pillar n carry a trinket? Only on levels that have them, and only when a life can be gained. */
+export const hasTrinket = (g, n) =>
+  LEVEL[g.level].trinkets && g.lives < LEVEL[g.level].maxLives &&
+  n >= CFG.trinketFirst && (n - CFG.trinketFirst) % CFG.trinketEvery === 0
+
+/** Where a pillar's trinket is: centred on it, near its top or bottom cap. */
+export const trinketPos = p => ({
+  x: p.x + CFG.pillarW / 2,
+  y: p.gapY + p.trinket.side * (p.gap / 2 - CFG.trinketInset),
+})
+
 function spawn(g, rand) {
   const gap = gapFor(g.score)
   const prev = g.pillars.at(-1)?.gapY ?? START_Y
   const shift = shiftFor(g.spawned, g.score)
   const lo = Math.max(CFG.edge + gap / 2, prev - shift)
   const hi = Math.min(GROUND - CFG.edge - gap / 2, prev + shift)
-  g.pillars.push({ x: SPAWN_X, gapY: lo + rand() * (hi - lo), gap, passed: false })
+  const p = { x: SPAWN_X, gapY: lo + rand() * (hi - lo), gap, passed: false, trinket: null }
+  // side: -1 near the top cap, 1 near the bottom one. takenAt: when collected.
+  if (hasTrinket(g, g.spawned)) p.trinket = { side: rand() < 0.5 ? -1 : 1, takenAt: -1 }
+  g.pillars.push(p)
   g.spawned++
 }
 
@@ -92,9 +125,10 @@ export function hitsRect(cx, cy, r, x, y, w, h) {
   return (cx - nx) ** 2 + (cy - ny) ** 2 < r * r
 }
 
-export function collides(g) {
+export const hitsGround = g => g.y + CFG.birdR >= g.floor
+
+export function hitsPillar(g) {
   const r = CFG.birdR
-  if (g.y + r >= g.floor) return true
   for (const p of g.pillars) {
     const top = p.gapY - p.gap / 2
     const bottom = p.gapY + p.gap / 2
@@ -103,6 +137,44 @@ export function collides(g) {
     if (hitsRect(CFG.birdX, g.y, r, p.x, bottom, CFG.pillarW, g.floor - bottom)) return true
   }
   return false
+}
+
+export const collides = g => hitsGround(g) || hitsPillar(g)
+
+/** Pick up any trinket the bird touches: +1 life, up to the level's max. */
+function collectTrinkets(g) {
+  for (const p of g.pillars) {
+    if (!p.trinket || p.trinket.takenAt >= 0) continue
+    const { x, y } = trinketPos(p)
+    if (Math.hypot(x - CFG.birdX, y - g.y) < CFG.birdR + CFG.trinketR) {
+      p.trinket.takenAt = g.t
+      g.lives = Math.min(g.lives + 1, LEVEL[g.level].maxLives)
+    }
+  }
+}
+
+/** A hit: lose a life, and end the run if it was the last one. */
+function hurt(g) {
+  g.lives--
+  if (g.lives > 0) {
+    g.ghost = true
+    g.hurtAt = g.t
+    g.vy = CFG.lift // a hop to recover
+    if (hitsGround(g)) g.y = g.floor - CFG.birdR
+    return
+  }
+  g.phase = 'over'
+  g.overAt = g.t
+  clampToGround(g)
+}
+
+/**
+ * While a ghost the bird flies through pillars and hops off the ground. It
+ * turns solid again once `ghostTime` is up and it's clear of every pillar.
+ */
+function ghostStep(g) {
+  if (hitsGround(g)) { g.y = g.floor - CFG.birdR; g.vy = CFG.lift }
+  if (g.t - g.hurtAt >= CFG.ghostTime && !hitsPillar(g)) g.ghost = false
 }
 
 /** Keep the bird between the sky's top edge and the ground. */
@@ -152,10 +224,8 @@ export function step(g, dt, rand = Math.random) {
   }
 
   scrollPillars(g, dt, rand)
-  if (collides(g)) {
-    g.phase = 'over'
-    g.overAt = g.t
-    clampToGround(g)
-  }
+  collectTrinkets(g)
+  if (g.ghost) ghostStep(g)
+  else if (collides(g)) hurt(g)
   return g
 }

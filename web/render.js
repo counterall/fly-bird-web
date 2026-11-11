@@ -1,6 +1,6 @@
 // Canvas renderer for Updraft. Draws one frame of a game from game.js onto a
 // 2D context already scaled to the W×H logical playfield.
-import { CFG, GROUND, H, W, medalFor, nextMedal } from './game.js'
+import { CFG, GROUND, H, LEVEL, W, medalFor, nextMedal, trinketPos } from './game.js'
 import { paintMagpie } from './magpie.js'
 
 // ── palette ────────────────────────────────────────────────────────────────
@@ -36,6 +36,11 @@ const GOLD = '#ffd6a0'
 const CARD = 'rgba(30, 22, 60, 0.72)'
 const CARD_INK = '#2a1f4d' // dark text on a gold highlight
 const DIM = 'rgba(20, 14, 40, 0.45)'
+// Trinket: a gold ring set with a blue-green stone
+const RING = '#ffcf6b'
+const RING_SHADE = '#b8862a'
+const GEM = '#5fd3c6'
+const FEATHER = '#f7f2ea' // life icons
 // Medals: face and rim
 const MEDAL = {
   bronze: ['#d99a62', '#94582c'],
@@ -47,6 +52,8 @@ const FONT = 'ui-rounded, system-ui, -apple-system, "Segoe UI", sans-serif'
 const MAGPIE_SCALE = 1.3 // visual only; collisions use CFG.birdR
 const NIGHT_DIST = 45 * CFG.spacing // distance flown by full night: ~45 points
 const MEDAL_TOAST = 1.6 // s the "medal!" message shows after earning one
+const TRINKET_SCALE = 1.4 // visual only; the pickup radius is CFG.trinketR
+const PICKUP_POP = 0.8 // s the "+1" floats up after a trinket is taken
 
 /** The sound toggle, top-right, in logical units; main.js hit-tests it. */
 export const MUTE_BUTTON = { x: W - 30, y: 30, r: 22 }
@@ -208,6 +215,66 @@ function drawPillars(c, pillars, top, ground) {
   }
 }
 
+/** A shiny ring with a twinkle, for the bird to grab. */
+function drawTrinket(c, x, y, t) {
+  const glow = c.createRadialGradient(x, y, 2, x, y, 20)
+  glow.addColorStop(0, 'rgba(255, 220, 140, 0.45)')
+  glow.addColorStop(1, 'rgba(255, 220, 140, 0)')
+  c.fillStyle = glow
+  c.beginPath()
+  c.arc(x, y, 20, 0, Math.PI * 2)
+  c.fill()
+  const bob = Math.sin(t * 4) * 1.5 // visual only; the pickup radius is generous
+  c.lineWidth = 3
+  c.strokeStyle = RING_SHADE
+  c.beginPath()
+  c.ellipse(x, y + 1 + bob, 7, 6, 0, 0, Math.PI * 2)
+  c.stroke()
+  c.strokeStyle = RING
+  c.beginPath()
+  c.ellipse(x, y + bob, 7, 6, 0, 0, Math.PI * 2)
+  c.stroke()
+  // the stone, on top of the ring
+  c.fillStyle = GEM
+  c.beginPath()
+  c.moveTo(x, y - 11 + bob); c.lineTo(x + 4, y - 7 + bob); c.lineTo(x, y - 3.5 + bob); c.lineTo(x - 4, y - 7 + bob)
+  c.closePath()
+  c.fill()
+  // a twinkle that grows and shrinks
+  const k = Math.max(0, Math.sin(t * 5))
+  if (k > 0) {
+    const sx = x + 8
+    const sy = y - 9 + bob
+    const r = 5 * k
+    c.fillStyle = '#fffaf0'
+    c.beginPath()
+    c.moveTo(sx, sy - r); c.lineTo(sx + r * 0.25, sy); c.lineTo(sx, sy + r); c.lineTo(sx - r * 0.25, sy)
+    c.moveTo(sx - r, sy); c.lineTo(sx, sy + r * 0.25); c.lineTo(sx + r, sy); c.lineTo(sx, sy - r * 0.25)
+    c.fill()
+  }
+}
+
+/** Trinkets still to take, and a "+1" floating up from ones just taken. */
+function drawTrinkets(c, g) {
+  for (const p of g.pillars) {
+    if (!p.trinket) continue
+    const { x, y } = trinketPos(p)
+    const since = g.t - p.trinket.takenAt
+    if (p.trinket.takenAt < 0) {
+      c.save()
+      c.translate(x, y)
+      c.scale(TRINKET_SCALE, TRINKET_SCALE)
+      drawTrinket(c, 0, 0, g.t + p.gapY)
+      c.restore()
+    }
+    else if (since < PICKUP_POP) {
+      c.globalAlpha = 1 - since / PICKUP_POP
+      text(c, '+1', x, y - 10 - since * 40, 18, GOLD)
+      c.globalAlpha = 1
+    }
+  }
+}
+
 function drawGround(c, scroll, ground, bottom, night) {
   c.fillStyle = mix(GROUND_BODY, GROUND_BODY_NIGHT, night)
   c.fillRect(0, ground, W, bottom - ground)
@@ -236,7 +303,10 @@ function tiltFor(g) {
 }
 
 function drawMagpie(c, g) {
+  // a ghost (just hit, with a life to spare) blinks
+  c.globalAlpha = g.ghost && Math.floor(g.t * 12) % 2 ? 0.3 : 1
   paintMagpie(c, CFG.birdX, g.y, tiltFor(g), MAGPIE_SCALE, wingAngle(g), g.phase === 'over')
+  c.globalAlpha = 1
 }
 
 // ── overlays ───────────────────────────────────────────────────────────────
@@ -324,6 +394,48 @@ function drawLevelToggle(c, level) {
   c.fillText('Hard', x + w / 4, y + 1)
 }
 
+const LEVEL_BLURB = {
+  easy: 'Grab shiny things for extra lives',
+  hard: 'One life. No pickups.',
+}
+
+/** One life icon: a feather, filled when it's a life you have. */
+function drawFeather(c, x, y, full) {
+  c.save()
+  c.translate(x, y)
+  c.rotate(0.5)
+  c.scale(1.4, 1.4)
+  c.beginPath()
+  c.moveTo(0, -9)
+  c.quadraticCurveTo(6, -2, 0, 9)
+  c.quadraticCurveTo(-6, -2, 0, -9)
+  if (full) {
+    c.fillStyle = FEATHER
+    c.fill()
+    c.strokeStyle = INK_OUTLINE
+    c.lineWidth = 1.5
+    c.stroke()
+    c.strokeStyle = 'rgba(40, 30, 70, 0.55)' // the quill
+    c.lineWidth = 1
+    c.beginPath()
+    c.moveTo(0, -6)
+    c.lineTo(0, 12)
+    c.stroke()
+  } else {
+    c.strokeStyle = 'rgba(255, 248, 238, 0.4)'
+    c.lineWidth = 1.5
+    c.stroke()
+  }
+  c.restore()
+}
+
+/** Lives, top left, on levels where you can have more than one. */
+function drawLives(c, g) {
+  const max = LEVEL[g.level].maxLives
+  if (max < 2) return
+  for (let i = 0; i < max; i++) drawFeather(c, 26 + i * 26, 30, i < g.lives)
+}
+
 function drawTitle(c, level, best, touch) {
   text(c, 'UPDRAFT', W / 2, 150, 46)
   text(c, touch ? 'Tap to fly' : 'Click or press Space to fly', W / 2, 200, 17)
@@ -333,7 +445,8 @@ function drawTitle(c, level, best, touch) {
     if (medal) drawMedal(c, W / 2 - w / 2 - 16, 232, 9, medal.name)
   }
   drawLevelToggle(c, level)
-  if (!touch) text(c, '← → level · P pause · M sound', W / 2, 344, 13, 'rgba(255, 248, 238, 0.7)')
+  text(c, LEVEL_BLURB[level], W / 2, 340, 14)
+  if (!touch) text(c, '← → level · P pause · M sound', W / 2, 368, 13, 'rgba(255, 248, 238, 0.7)')
 }
 
 /** "Bronze medal!" under the score, just after a run earns a medal. */
@@ -427,11 +540,13 @@ export function render(c, g, ui, view = { top: 0, bottom: 0, ground: GROUND }) {
   drawHills(c, g.scroll, 0.2, 1.7, 60, GROUND - 90, mix(HILL_FAR, HILL_FAR_NIGHT, night), ground)
   drawHills(c, g.scroll, 0.45, 4.2, 40, GROUND - 30, mix(HILL_NEAR, HILL_NEAR_NIGHT, night), ground)
   drawPillars(c, g.pillars, top, ground)
+  drawTrinkets(c, g)
   drawGround(c, g.scroll, ground, bottom, night)
   drawMagpie(c, g)
 
   if (g.phase === 'playing') {
     text(c, String(g.score), W / 2, 64, 52)
+    drawLives(c, g)
     drawMedalToast(c, g)
   } else if (g.phase === 'ready') drawTitle(c, g.level, best, touch)
   else drawGameOver(c, g, best, touch)

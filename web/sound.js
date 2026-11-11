@@ -69,6 +69,13 @@ export function createSound(muted = false) {
     },
     // a rising arpeggio when a run earns a medal
     medal: t => [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone('triangle', f, f, t + i * 0.08, 0.28, 0.16)),
+    // a bright, quick sparkle for a trinket
+    trinket: t => [1318.5, 1760, 2093].forEach((f, i) => tone('triangle', f, f, t + i * 0.05, 0.18, 0.12)),
+    // a lighter knock when a hit costs a life but the run goes on
+    hurt: t => {
+      tone('sine', 260, 110, t, 0.22, 0.35)
+      hiss('lowpass', 1200, 300, 0.7, t, 0.15, 0.2)
+    },
     // a dull thud
     crash: t => {
       tone('sine', 180, 45, t, 0.35, 0.5)

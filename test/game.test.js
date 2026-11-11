@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { CFG, GROUND, LEVELS, MEDALS, START_Y, W, createGame, flap, step, hitsRect, gapFor, speedFor, isCalm, shiftFor, medalFor, nextMedal } from '../web/game.js'
+import { CFG, GROUND, LEVEL, LEVELS, MEDALS, hasTrinket, trinketPos, START_Y, W, createGame, flap, step, hitsRect, gapFor, speedFor, isCalm, shiftFor, medalFor, nextMedal } from '../web/game.js'
 
 const run = (g, secs, rand = () => 0.5) => { for (let i = 0; i < secs * 60; i++) step(g, 1 / 60, rand); return g }
 
@@ -168,4 +168,86 @@ test('a game keeps its level across restarts', () => {
   const g = run(flap(createGame('hard')), 3)
   g.t += CFG.restartDelay
   assert.equal(flap(g).level, 'hard')
+})
+
+// A pillar right at the bird, with the gap far away: flying on means a hit.
+const wall = () => ({ x: CFG.birdX - 5, gapY: 100, gap: 120, passed: false, trinket: null })
+
+test('easy: trinkets ride on every 7th pillar from the 4th, while a life can be gained', () => {
+  const g = createGame('easy')
+  const on = [...Array(30).keys()].filter(n => hasTrinket(g, n))
+  assert.deepEqual(on, [4, 11, 18, 25])
+  g.lives = LEVEL.easy.maxLives
+  assert.equal(hasTrinket(g, 4), false)
+  assert.equal(hasTrinket(createGame('hard'), 4), false)
+})
+
+test('spawned pillars carry their trinket', () => {
+  const g = flap(createGame('easy'))
+  for (let i = 0; i < 60 * 12 && g.spawned < 6; i++) { g.y = 300; g.vy = 0; g.pillars.forEach(p => { p.gapY = 300; p.gap = 400 }); step(g, 1 / 60, () => 0.5) }
+  const p = g.pillars.find(q => q.trinket)
+  assert.ok(p, 'a pillar with a trinket')
+  assert.equal(g.pillars.filter(q => q.trinket).length, 1)
+})
+
+test('collecting a trinket gives a life, up to the maximum', () => {
+  const g = flap(createGame('easy'))
+  const p = { x: CFG.birdX - CFG.pillarW / 2, gapY: 300, gap: 400, passed: false, trinket: { side: 1, takenAt: -1 } }
+  g.pillars = [p]
+  g.y = trinketPos(p).y
+  g.vy = 0
+  step(g, 1 / 60)
+  assert.equal(g.lives, 2)
+  assert.ok(p.trinket.takenAt > 0)
+  step(g, 1 / 60) // already taken: no more
+  assert.equal(g.lives, 2)
+  g.lives = LEVEL.easy.maxLives
+  g.pillars = [{ ...p, x: CFG.birdX - CFG.pillarW / 2, trinket: { side: 1, takenAt: -1 } }]
+  g.y = trinketPos(g.pillars[0]).y
+  step(g, 1 / 60)
+  assert.equal(g.lives, LEVEL.easy.maxLives)
+})
+
+test('a hit with lives to spare costs one and lets the bird fly through for a while', () => {
+  const g = flap(createGame('easy'))
+  g.lives = 2
+  g.y = 300
+  g.pillars = [wall()]
+  step(g, 1 / 60)
+  assert.equal(g.phase, 'playing')
+  assert.equal(g.lives, 1)
+  assert.ok(g.ghost)
+  assert.equal(g.vy, CFG.lift)
+  // still inside the pillar after ghostTime: stays a ghost until it's clear
+  for (let i = 0; i < 60 * CFG.ghostTime + 5; i++) { g.pillars[0].x = CFG.birdX - 5; g.y = 300; step(g, 1 / 60) }
+  assert.ok(g.ghost)
+  assert.equal(g.lives, 1)
+  g.pillars = []
+  step(g, 1 / 60)
+  assert.equal(g.ghost, false)
+  // solid again: the next hit is the last
+  g.pillars = [wall()]
+  step(g, 1 / 60)
+  assert.equal(g.phase, 'over')
+  assert.equal(g.lives, 0)
+})
+
+test('a ghost hops off the ground instead of crashing', () => {
+  const g = flap(createGame('easy'))
+  g.lives = 2
+  g.y = GROUND - CFG.birdR + 1
+  g.vy = 300
+  step(g, 1 / 60)
+  assert.equal(g.lives, 1)
+  for (let i = 0; i < 60; i++) { g.pillars = []; step(g, 1 / 60) }
+  assert.equal(g.phase, 'playing')
+  assert.ok(g.y < GROUND - CFG.birdR)
+})
+
+test('hard: one life, so the first hit ends the run', () => {
+  const g = flap(createGame('hard'))
+  assert.equal(g.lives, 1)
+  g.pillars = [wall()]
+  step(g, 1 / 60)
+  assert.equal(g.phase, 'over')
 })
