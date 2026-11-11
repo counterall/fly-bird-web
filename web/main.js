@@ -1,9 +1,11 @@
 // Entry point: sizes the canvas to the window, runs the game loop and input.
-import { GROUND, H, W, createGame, flap, medalFor, step } from './game.js'
-import { MUTE_BUTTON, render } from './render.js'
+import { GROUND, H, LEVELS, W, createGame, flap, medalFor, step } from './game.js'
+import { LEVEL_TOGGLE, MUTE_BUTTON, render } from './render.js'
 import { createSound } from './sound.js'
 
-const LS_BEST = 'updraft:best'
+const LS_BEST = level => `updraft:best:${level}`
+const LS_BEST_OLD = 'updraft:best' // before levels: today's easy game
+const LS_LEVEL = 'updraft:level'
 const LS_MUTED = 'updraft:muted'
 
 // localStorage can be unavailable (private mode, blocked site data).
@@ -16,17 +18,28 @@ function store(key, v) {
 
 const canvas = document.getElementById('game')
 const c = canvas.getContext('2d')
-let g = createGame()
-let best = Number.parseInt(load(LS_BEST) ?? '0', 10) || 0
+
+// One-off migration: the best score from before levels counts as easy.
+if (load(LS_BEST('easy')) === null && load(LS_BEST_OLD) !== null) store(LS_BEST('easy'), load(LS_BEST_OLD))
+
+const bests = Object.fromEntries(LEVELS.map(l => [l, Number.parseInt(load(LS_BEST(l)) ?? '0', 10) || 0]))
+let g = createGame(LEVELS.includes(load(LS_LEVEL)) ? load(LS_LEVEL) : 'easy')
 const sound = createSound(load(LS_MUTED) === '1')
 let paused = false
 let touch = matchMedia('(pointer: coarse)').matches
 let last = performance.now()
 
-function saveBest(score) {
-  if (score <= best) return
-  best = score
-  store(LS_BEST, best)
+function saveBest(level, score) {
+  if (score <= bests[level]) return
+  bests[level] = score
+  store(LS_BEST(level), score)
+}
+
+/** Pick the level on the title screen; it's remembered for next time. */
+function chooseLevel(level) {
+  if (g.phase !== 'ready' || g.level === level) return
+  g.level = level
+  store(LS_LEVEL, level)
 }
 
 function toggleMute() {
@@ -73,18 +86,18 @@ fit()
 function press() {
   if (paused) { paused = false; last = performance.now(); return }
   g = flap(g)
-  if (g.mode === 'playing' && g.flapAt === g.t) sound.play('flap')
+  if (g.phase === 'playing' && g.flapAt === g.t) sound.play('flap')
 }
 
 function togglePause() {
-  if (g.mode !== 'playing') return
+  if (g.phase !== 'playing') return
   paused = !paused
   last = performance.now()
 }
 
 // Losing focus mid-run shouldn't cost the player their run.
 function autoPause() {
-  if (g.mode === 'playing') paused = true
+  if (g.phase === 'playing') paused = true
 }
 
 function frame(now) {
@@ -93,13 +106,13 @@ function frame(now) {
   g.ceil = -view.top
   g.floor = view.ground
   if (!paused) {
-    const was = g.mode
+    const was = g.phase
     const score = g.score
     step(g, dt)
     if (g.score > score) sound.play(medalFor(g.score)?.score === g.score ? 'medal' : 'score')
-    if (was === 'playing' && g.mode === 'over') {
+    if (was === 'playing' && g.phase === 'over') {
       sound.play('crash')
-      saveBest(g.score)
+      saveBest(g.level, g.score)
     }
   }
   // Match the backing store to the canvas's device pixels, then map the
@@ -111,17 +124,25 @@ function frame(now) {
   const sx = pw / W
   const sy = ph / (H + view.top + view.bottom)
   c.setTransform(sx, 0, 0, sy, 0, view.top * sy)
-  render(c, g, { best, paused, touch, muted: sound.muted }, view)
+  render(c, g, { best: bests[g.level], paused, touch, muted: sound.muted }, view)
   requestAnimationFrame(frame)
 }
 requestAnimationFrame(frame)
 
-/** Is the page point (clientX, clientY) on the mute button? */
-function onMuteButton(clientX, clientY) {
+/** A page point (clientX, clientY) in logical playfield units. */
+function toLogical(clientX, clientY) {
   const r = canvas.getBoundingClientRect()
-  const x = ((clientX - r.left) / r.width) * W
-  const y = ((clientY - r.top) / r.height) * (H + view.top + view.bottom) - view.top
-  return Math.hypot(x - MUTE_BUTTON.x, y - MUTE_BUTTON.y) <= MUTE_BUTTON.r
+  return {
+    x: ((clientX - r.left) / r.width) * W,
+    y: ((clientY - r.top) / r.height) * (H + view.top + view.bottom) - view.top,
+  }
+}
+
+/** The level whose half of the title-screen toggle is at p, if any. */
+function levelAt({ x, y }) {
+  const t = LEVEL_TOGGLE
+  if (g.phase !== 'ready' || Math.abs(x - t.x) > t.w / 2 || Math.abs(y - t.y) > t.h / 2) return null
+  return x < t.x ? 'easy' : 'hard'
 }
 
 addEventListener('keydown', e => {
@@ -130,15 +151,20 @@ addEventListener('keydown', e => {
   if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); touch = false; press() }
   else if (e.code === 'KeyP' || e.code === 'Escape') { e.preventDefault(); togglePause() }
   else if (e.code === 'KeyM') { e.preventDefault(); toggleMute() }
+  else if (e.code === 'ArrowLeft' || e.code === 'Digit1') { e.preventDefault(); chooseLevel('easy') }
+  else if (e.code === 'ArrowRight' || e.code === 'Digit2') { e.preventDefault(); chooseLevel('hard') }
 })
 // Anywhere on the page counts as a flap, so phones don't need to aim at the
-// canvas; only the mute button is excluded.
+// canvas; only the mute button and the level toggle are excluded.
 addEventListener('pointerdown', e => {
   if (e.button > 0) return
   e.preventDefault()
   touch = e.pointerType === 'touch'
   sound.unlock()
-  if (onMuteButton(e.clientX, e.clientY)) toggleMute()
+  const p = toLogical(e.clientX, e.clientY)
+  const level = levelAt(p)
+  if (Math.hypot(p.x - MUTE_BUTTON.x, p.y - MUTE_BUTTON.y) <= MUTE_BUTTON.r) toggleMute()
+  else if (level) chooseLevel(level)
   else press()
 }, { passive: false })
 // Mobile browsers only let audio start on pointerup / touchend, not pointerdown.

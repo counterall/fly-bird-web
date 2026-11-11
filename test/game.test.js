@@ -1,25 +1,25 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { CFG, GROUND, MEDALS, START_Y, W, createGame, flap, step, hitsRect, gapFor, speedFor, isCalm, shiftFor, medalFor, nextMedal } from '../web/game.js'
+import { CFG, GROUND, LEVELS, MEDALS, START_Y, W, createGame, flap, step, hitsRect, gapFor, speedFor, isCalm, shiftFor, medalFor, nextMedal } from '../web/game.js'
 
 const run = (g, secs, rand = () => 0.5) => { for (let i = 0; i < secs * 60; i++) step(g, 1 / 60, rand); return g }
 
-test('ready mode hovers without falling', () => {
+test('ready phase hovers without falling', () => {
   const g = run(createGame(), 3)
-  assert.equal(g.mode, 'ready')
+  assert.equal(g.phase, 'ready')
   assert.ok(Math.abs(g.y - START_Y) <= 8)
   assert.equal(g.pillars.length, 0)
 })
 
 test('first flap starts the game and lifts the bird', () => {
   const g = flap(createGame())
-  assert.equal(g.mode, 'playing')
+  assert.equal(g.phase, 'playing')
   assert.equal(g.vy, CFG.lift)
 })
 
 test('without input the bird hits the ground', () => {
   const g = run(flap(createGame()), 3)
-  assert.equal(g.mode, 'over')
+  assert.equal(g.phase, 'over')
   assert.equal(g.y, GROUND - CFG.birdR)
 })
 
@@ -32,7 +32,7 @@ test('flying through gaps scores points', () => {
     if (g.y > target && g.vy > 0) g = flap(g)
     step(g, 1 / 60, () => 0.5)
   }
-  assert.equal(g.mode, 'playing')
+  assert.equal(g.phase, 'playing')
   assert.ok(g.score >= 8, `score ${g.score}`)
 })
 
@@ -40,10 +40,10 @@ test('hitting a pillar ends the run', () => {
   const g = flap(createGame())
   g.pillars.push({ x: CFG.birdX - 5, gapY: 100, gap: 120, passed: false })
   step(g, 1 / 60)
-  assert.equal(g.mode, 'over')
+  assert.equal(g.phase, 'over')
 })
 
-test('restart only after the delay', () => {
+test('restart only after the delay, via the title screen', () => {
   const g = run(flap(createGame()), 3)
   const t = g.t
   g.overAt = t
@@ -51,8 +51,10 @@ test('restart only after the delay', () => {
   g.t = t + CFG.restartDelay + 0.01
   const n = flap(g)
   assert.notEqual(n, g)
-  assert.equal(n.mode, 'playing')
+  assert.equal(n.phase, 'ready') // back to the title screen…
+  assert.equal(flap(n).phase, 'playing') // …and the next flap starts
   assert.equal(n.score, 0)
+  assert.equal(n.level, 'easy')
 })
 
 test('gap shrinks with score but not below the minimum', () => {
@@ -89,7 +91,7 @@ test('a wreck that crashes into a pillar falls to the ground', () => {
   const g = flap(createGame())
   g.pillars.push({ x: CFG.birdX - 5, gapY: 400, gap: 120, passed: false })
   step(g, 1 / 60)
-  assert.equal(g.mode, 'over')
+  assert.equal(g.phase, 'over')
   run(g, 3)
   assert.equal(g.y, GROUND - CFG.birdR)
 })
@@ -103,7 +105,7 @@ test('a lower floor (tall screens) moves the ground line and extends pillars to 
   const g = flap(createGame())
   g.floor = GROUND + 50
   for (let i = 0; i < 60 * 3; i++) { g.pillars = []; step(g, 1 / 60, () => 0.5) }
-  assert.equal(g.mode, 'over')
+  assert.equal(g.phase, 'over')
   assert.equal(g.y, GROUND + 50 - CFG.birdR)
   // below GROUND but under a pillar still collides
   const h = flap(createGame())
@@ -111,7 +113,7 @@ test('a lower floor (tall screens) moves the ground line and extends pillars to 
   h.y = GROUND + 20
   h.pillars = [{ x: CFG.birdX - 5, gapY: 300, gap: 150, passed: false }]
   step(h, 1 / 60)
-  assert.equal(h.mode, 'over')
+  assert.equal(h.phase, 'over')
 })
 
 test('consecutive gaps never move further than the allowed shift', () => {
@@ -120,7 +122,7 @@ test('consecutive gaps never move further than the allowed shift', () => {
   for (let n = 0; n < 200; n++) {
     // a lone pillar just far enough left to trigger the next spawn, clear of the bird
     g.pillars = [{ x: W + 10 - CFG.spacing - 1, gapY: prev, gap: CFG.gap, passed: true }]
-    Object.assign(g, { spawned: n, score: n, y: 300, vy: 0, mode: 'playing' })
+    Object.assign(g, { spawned: n, score: n, y: 300, vy: 0, phase: 'playing' })
     step(g, 1 / 60, () => (n % 2 ? 0 : 0.999)) // swing to opposite extremes
     const p = g.pillars.at(-1)
     assert.equal(g.pillars.length, 2)
@@ -158,4 +160,12 @@ test('distance flown grows only while playing and records when points score', ()
   step(h, 1 / 60)
   assert.ok(h.dist > 0)
   assert.equal(h.scoredAt, h.t)
+})
+
+test('a game keeps its level across restarts', () => {
+  assert.deepEqual(LEVELS, ['easy', 'hard'])
+  assert.equal(createGame().level, 'easy')
+  const g = run(flap(createGame('hard')), 3)
+  g.t += CFG.restartDelay
+  assert.equal(flap(g).level, 'hard')
 })

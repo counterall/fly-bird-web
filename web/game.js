@@ -31,6 +31,9 @@ export const CFG = Object.freeze({
   restartDelay: 0.6, // s after crashing before a flap restarts
 })
 
+/** Difficulty levels. Each run is played at one; it never changes mid-run. */
+export const LEVELS = Object.freeze(['easy', 'hard'])
+
 /** Medals for a run, lowest first. */
 export const MEDALS = Object.freeze([
   { name: 'bronze', score: 10 },
@@ -41,25 +44,26 @@ export const medalFor = score => MEDALS.findLast(m => score >= m.score) ?? null
 export const nextMedal = score => MEDALS.find(m => score < m.score) ?? null
 
 /**
- * A fresh game. `ceil` / `floor` are the top of the visible sky and the ground
+ * A fresh game at `level` (one of LEVELS). `phase` is 'ready' (hovering on
+ * the title screen), 'playing' or 'over'. `ceil` / `floor` are the top of the visible sky and the ground
  * line; main.js moves them out on screens taller than 2:3. `spawned` counts
  * pillars so far, `dist` is the distance flown, `scoredAt` the time of the
  * last point.
  */
-export function createGame() {
-  return { mode: 'ready', t: 0, y: START_Y, vy: 0, pillars: [], score: 0, scroll: 0, overAt: 0, flapAt: -1, scoredAt: -1, spawned: 0, dist: 0, ceil: 0, floor: GROUND }
+export function createGame(level = 'easy') {
+  return { level, phase: 'ready', t: 0, y: START_Y, vy: 0, pillars: [], score: 0, scroll: 0, overAt: 0, flapAt: -1, scoredAt: -1, spawned: 0, dist: 0, ceil: 0, floor: GROUND }
 }
 
 export const speedFor = score => CFG.speed + Math.min(score * CFG.speedPerPoint, CFG.speedCap)
 export const gapFor = score => Math.max(CFG.gapMin, CFG.gap - score)
 
-/** Player input. Returns the game to keep using (a fresh one after a crash). */
+/**
+ * Player input. Returns the game to keep using: after a crash, a fresh one
+ * back on the title screen, where the level can be changed.
+ */
 export function flap(g) {
-  if (g.mode === 'over') {
-    if (g.t - g.overAt < CFG.restartDelay) return g
-    g = createGame()
-  }
-  if (g.mode === 'ready') g.mode = 'playing'
+  if (g.phase === 'over') return g.t - g.overAt < CFG.restartDelay ? g : createGame(g.level)
+  if (g.phase === 'ready') g.phase = 'playing'
   g.vy = CFG.lift
   g.flapAt = g.t
   return g
@@ -131,7 +135,7 @@ export function step(g, dt, rand = Math.random) {
   dt = Math.min(dt, 1 / 20) // don't tunnel through pillars after a stall
   g.t += dt
 
-  if (g.mode === 'ready') {
+  if (g.phase === 'ready') {
     g.y = START_Y + Math.sin(g.t * 3) * 8
     g.scroll += CFG.speed * dt
     return g
@@ -142,14 +146,14 @@ export function step(g, dt, rand = Math.random) {
   g.y += g.vy * dt
   clampToSky(g)
 
-  if (g.mode === 'over') {
+  if (g.phase === 'over') {
     clampToGround(g)
     return g
   }
 
   scrollPillars(g, dt, rand)
   if (collides(g)) {
-    g.mode = 'over'
+    g.phase = 'over'
     g.overAt = g.t
     clampToGround(g)
   }

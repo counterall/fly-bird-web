@@ -34,6 +34,7 @@ const INK = '#fff8ee'
 const INK_OUTLINE = 'rgba(30, 20, 60, 0.75)'
 const GOLD = '#ffd6a0'
 const CARD = 'rgba(30, 22, 60, 0.72)'
+const CARD_INK = '#2a1f4d' // dark text on a gold highlight
 const DIM = 'rgba(20, 14, 40, 0.45)'
 // Medals: face and rim
 const MEDAL = {
@@ -42,12 +43,15 @@ const MEDAL = {
   gold: ['#ffd66e', '#c48a1a'],
 }
 
+const FONT = 'ui-rounded, system-ui, -apple-system, "Segoe UI", sans-serif'
 const MAGPIE_SCALE = 1.3 // visual only; collisions use CFG.birdR
 const NIGHT_DIST = 45 * CFG.spacing // distance flown by full night: ~45 points
 const MEDAL_TOAST = 1.6 // s the "medal!" message shows after earning one
 
 /** The sound toggle, top-right, in logical units; main.js hit-tests it. */
 export const MUTE_BUTTON = { x: W - 30, y: 30, r: 22 }
+/** The title screen's "Easy | Hard" toggle (centre and size); main.js hit-tests it. */
+export const LEVEL_TOGGLE = { x: W / 2, y: 300, w: 200, h: 40 }
 
 // ── colour helpers ─────────────────────────────────────────────────────────
 const rgb = hex => [1, 3, 5].map(i => Number.parseInt(hex.slice(i, i + 2), 16))
@@ -217,8 +221,8 @@ function drawGround(c, scroll, ground, bottom, night) {
 // ── the magpie in play ─────────────────────────────────────────────────────
 /** Wing angle in radians: positive raises the wing tip. */
 function wingAngle(g) {
-  if (g.mode === 'ready') return Math.sin(g.t * 11) * 0.7
-  if (g.mode === 'over') return 0.9
+  if (g.phase === 'ready') return Math.sin(g.t * 11) * 0.7
+  if (g.phase === 'over') return 0.9
   const since = g.t - g.flapAt
   const beat = 0.28 // one full wing beat after each flap
   if (since >= 0 && since < beat) return Math.sin((since / beat) * Math.PI * 2 + Math.PI / 2) * 0.85
@@ -227,17 +231,17 @@ function wingAngle(g) {
 
 /** Nose up when climbing, down when falling. */
 function tiltFor(g) {
-  if (g.mode === 'ready') return Math.sin(g.t * 3) * 0.06
+  if (g.phase === 'ready') return Math.sin(g.t * 3) * 0.06
   return Math.max(-0.45, Math.min(1.2, g.vy / 600))
 }
 
 function drawMagpie(c, g) {
-  paintMagpie(c, CFG.birdX, g.y, tiltFor(g), MAGPIE_SCALE, wingAngle(g), g.mode === 'over')
+  paintMagpie(c, CFG.birdX, g.y, tiltFor(g), MAGPIE_SCALE, wingAngle(g), g.phase === 'over')
 }
 
 // ── overlays ───────────────────────────────────────────────────────────────
 function text(c, s, x, y, size, color = INK) {
-  c.font = `800 ${size}px ui-rounded, system-ui, -apple-system, "Segoe UI", sans-serif`
+  c.font = `800 ${size}px ${FONT}`
   c.textAlign = 'center'
   c.textBaseline = 'middle'
   c.lineWidth = Math.max(3, size / 7)
@@ -299,7 +303,28 @@ function drawMedal(c, x, y, r, tier) {
   c.restore()
 }
 
-function drawTitle(c, best, touch) {
+/** "Easy | Hard" pill with the chosen level highlighted. */
+function drawLevelToggle(c, level) {
+  const { x, y, w, h } = LEVEL_TOGGLE
+  c.fillStyle = CARD
+  c.beginPath()
+  c.roundRect(x - w / 2, y - h / 2, w, h, h / 2)
+  c.fill()
+  const left = level === 'easy'
+  c.fillStyle = GOLD
+  c.beginPath()
+  c.roundRect(left ? x - w / 2 + 3 : x + 1, y - h / 2 + 3, w / 2 - 4, h - 6, (h - 6) / 2)
+  c.fill()
+  c.font = `800 16px ${FONT}`
+  c.textAlign = 'center'
+  c.textBaseline = 'middle'
+  c.fillStyle = left ? CARD_INK : INK
+  c.fillText('Easy', x - w / 4, y + 1)
+  c.fillStyle = left ? INK : CARD_INK
+  c.fillText('Hard', x + w / 4, y + 1)
+}
+
+function drawTitle(c, level, best, touch) {
   text(c, 'UPDRAFT', W / 2, 150, 46)
   text(c, touch ? 'Tap to fly' : 'Click or press Space to fly', W / 2, 200, 17)
   if (best > 0) {
@@ -307,7 +332,8 @@ function drawTitle(c, best, touch) {
     const medal = medalFor(best)
     if (medal) drawMedal(c, W / 2 - w / 2 - 16, 232, 9, medal.name)
   }
-  if (!touch) text(c, 'P to pause · M for sound', W / 2, 300, 13, 'rgba(255, 248, 238, 0.7)')
+  drawLevelToggle(c, level)
+  if (!touch) text(c, '← → level · P pause · M sound', W / 2, 344, 13, 'rgba(255, 248, 238, 0.7)')
 }
 
 /** "Bronze medal!" under the score, just after a run earns a medal. */
@@ -333,12 +359,12 @@ function drawGameOver(c, g, best, touch) {
   drawMedal(c, 115, 284, 30, medal?.name)
   text(c, medal ? capital(medal.name) : 'No medal', 115, 332, 13, medal ? MEDAL[medal.name][0] : 'rgba(255, 248, 238, 0.6)')
   text(c, 'Score', 215, 250, 15)
-  text(c, 'Best', 295, 250, 15)
+  text(c, `${capital(g.level)} best`, 295, 250, 15)
   text(c, String(g.score), 215, 286, 38)
   text(c, String(best), 295, 286, 38, isBest ? GOLD : INK)
   if (isBest) text(c, 'New best!', 255, 322, 15, GOLD)
   else if (next) text(c, `${capital(next.name)} at ${next.score}`, 255, 322, 13, 'rgba(255, 248, 238, 0.7)')
-  if (since > CFG.restartDelay) text(c, touch ? 'Tap to fly again' : 'Space to fly again', W / 2, 364, 14)
+  if (since > CFG.restartDelay) text(c, touch ? 'Tap to continue' : 'Space to continue', W / 2, 364, 14)
 }
 
 /** Speaker icon, crossed out when muted. */
@@ -404,10 +430,10 @@ export function render(c, g, ui, view = { top: 0, bottom: 0, ground: GROUND }) {
   drawGround(c, g.scroll, ground, bottom, night)
   drawMagpie(c, g)
 
-  if (g.mode === 'playing') {
+  if (g.phase === 'playing') {
     text(c, String(g.score), W / 2, 64, 52)
     drawMedalToast(c, g)
-  } else if (g.mode === 'ready') drawTitle(c, best, touch)
+  } else if (g.phase === 'ready') drawTitle(c, g.level, best, touch)
   else drawGameOver(c, g, best, touch)
 
   if (paused) drawPaused(c, top, bottom, touch)

@@ -4,7 +4,7 @@ Guidance for AI coding agents working in this repository.
 
 ## What this is
 
-**Updraft**: a one-button arcade game played in the browser as a static single-page app, published to GitHub Pages. You fly a magpie through gaps between dusk-lit stone pillars. Space / ↑ / W / click / tap flaps, gravity pulls down, P / Esc pauses, and M (or the speaker button, top right) mutes. The game also pauses itself when the tab loses focus or is hidden. Runs earn bronze, silver and gold medals at 10, 25 and 50 points, and the sky turns from dusk to night as a run goes on. The best score and the mute setting are kept in `localStorage` (`updraft:best`, `updraft:muted`).
+**Updraft**: a one-button arcade game played in the browser as a static single-page app, published to GitHub Pages. You fly a magpie through gaps between dusk-lit stone pillars. Space / ↑ / W / click / tap flaps, gravity pulls down, P / Esc pauses, and M (or the speaker button, top right) mutes. The title screen has an Easy | Hard toggle (← / → or 1 / 2), which is remembered. After a crash, a tap goes back to the title screen. The game also pauses itself when the tab loses focus or is hidden. Runs earn bronze, silver and gold medals at 10, 25 and 50 points, and the sky turns from dusk to night as a run goes on. The level, the best score per level and the mute setting are kept in `localStorage` (`updraft:level`, `updraft:best:easy`, `updraft:best:hard`, `updraft:muted`). The best score from before levels existed (`updraft:best`) is moved to easy.
 
 It has original art and an original name. Keep it that way, and don't copy the look, name or assets of any existing game.
 
@@ -37,6 +37,7 @@ npm start    # serve web/ at http://localhost:8080
 - Files must be served over HTTP, because ES modules don't load from `file://`.
 - The renderer draws in logical units: `main.js` sets the transform to scale 400×600 to the canvas's device pixels.
 - Visual sizes, like the magpie's `MAGPIE_SCALE` in `render.js`, are independent of the collision radius `CFG.birdR`. Only the body collides, not the tail.
+- **Phase vs level:** `g.phase` is the run's state (`ready` / `playing` / `over`), and `g.level` is the difficulty (`easy` / `hard`, see `LEVELS`). A run keeps its level, and the level can only change on the title screen.
 - **Gap placement:** each gap can move at most `shiftFor()` from the previous one, an amount that grows with the score. After every 10th pillar comes a calm stretch of 3 pillars whose gaps barely move.
 - **Icons:** after changing `drawIcon()` or `web/magpie.js`, regenerate the PNGs. Run `python3 -m http.server` in the repo root, open `/tools/icons.html`, and save each PNG into `web/`. Keep the icons full-bleed with no transparency, because iOS rounds the corners itself.
 - GitHub Pages must be set to **Source: GitHub Actions** in the repo settings, under Pages.
