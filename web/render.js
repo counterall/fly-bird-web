@@ -63,8 +63,8 @@ export const THEMES = Object.freeze({
     capGlow: '#c9f28c',
     groundTop: '#5cb043', // grass
     groundTopNight: '#2a5224',
-    groundBody: '#6b4a32', // dark soil
-    groundBodyNight: '#3a2a20',
+    groundBody: '#5cb043', // grass all the way down
+    groundBodyNight: '#2a5224',
     groundStripe: 'rgba(0, 0, 0, 0)', // no stripes: the meadow moves instead
     meadow: true, // grass tufts and flowers along the ground
     draft: [40, 110, 180], // updraft band
@@ -113,8 +113,21 @@ const MEDAL_TOAST = 1.6 // s the "medal!" message shows after earning one
 const TRINKET_SCALE = 1.4 // visual only; the pickup radius is CFG.trinketR
 const PICKUP_POP = 0.8 // s the "+1" floats up after a trinket is taken
 
-/** The gear that opens the settings, top-right, in logical units; main.js hit-tests it. */
-export const SETTINGS_BUTTON = { x: W - 30, y: 30, r: 22 }
+/**
+ * The button in the screen's top-right corner, in logical units (main.js
+ * hit-tests it): pause while a run is going, resume while it is paused, and
+ * otherwise the gear that opens the settings. It follows the top of the screen, not of the playfield,
+ * so it stays in the corner on tall phones; `view.inset` (logical px) keeps it
+ * below a notch or status bar.
+ */
+export function cornerButton(view, phase, paused, settings) {
+  return {
+    x: W - 30,
+    y: -view.top + (view.inset ?? 0) + 30,
+    r: 22,
+    kind: phase !== 'playing' || settings ? 'settings' : paused ? 'resume' : 'pause',
+  }
+}
 /** The title screen's "Easy | Normal | Hard" toggle (centre and size); main.js hit-tests it. */
 export const LEVEL_TOGGLE = { x: W / 2, y: 314, w: 270, h: 40 }
 /** The settings panel (centre and size) and the controls on it. */
@@ -649,17 +662,34 @@ function drawGameOver(c, g, best, touch) {
   if (since > CFG.restartDelay) text(c, touch ? 'Tap to continue' : 'Space to continue', W / 2, 364, 14)
 }
 
-/** The gear button that opens the settings. */
-function drawSettingsButton(c) {
-  const { x, y, r } = SETTINGS_BUTTON
+/** The corner button: two bars to pause, a triangle to resume, otherwise a gear. */
+function drawCornerButton(c, { x, y, r, kind }) {
   c.save()
   c.globalAlpha = 0.75
   c.fillStyle = 'rgba(30, 22, 60, 0.45)'
   c.beginPath()
   c.arc(x, y, r * 0.75, 0, Math.PI * 2)
   c.fill()
-  // eight teeth around a ring
   c.fillStyle = INK
+  if (kind === 'pause') {
+    c.beginPath()
+    c.roundRect(x - 6, y - 7, 4, 14, 1.5)
+    c.roundRect(x + 2, y - 7, 4, 14, 1.5)
+    c.fill()
+    c.restore()
+    return
+  }
+  if (kind === 'resume') {
+    c.beginPath()
+    c.moveTo(x - 4, y - 7.5)
+    c.lineTo(x + 7, y)
+    c.lineTo(x - 4, y + 7.5)
+    c.closePath()
+    c.fill()
+    c.restore()
+    return
+  }
+  // a gear: eight teeth around a ring
   c.beginPath()
   for (let k = 0; k < 16; k++) {
     const a = (k / 16) * Math.PI * 2 - Math.PI / 16
@@ -745,7 +775,7 @@ export function render(c, g, ui, view = { top: 0, bottom: 0, ground: GROUND }) {
     else drawGameOver(c, g, best, touch)
     if (paused) drawPaused(c, top, bottom, touch)
   }
-  drawSettingsButton(c)
+  drawCornerButton(c, cornerButton(view, g.phase, paused, settings))
 }
 
 // ── app icon ───────────────────────────────────────────────────────────────
