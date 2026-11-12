@@ -201,7 +201,8 @@ addEventListener('keydown', e => {
 })
 // Anywhere on the page counts as a flap, so phones don't need to aim at the
 // canvas; only the corner button (pause / settings), the settings panel and
-// the level toggle are excluded.
+// the level toggle are excluded. While paused there is no corner button, so
+// any tap resumes.
 addEventListener('pointerdown', e => {
   if (e.button > 0) return
   e.preventDefault()
@@ -209,7 +210,7 @@ addEventListener('pointerdown', e => {
   sound.unlock()
   const p = toLogical(e.clientX, e.clientY)
   const corner = cornerButton(view, g.phase, paused, settings)
-  const onCorner = Math.hypot(p.x - corner.x, p.y - corner.y) <= corner.r
+  const onCorner = !!corner && Math.hypot(p.x - corner.x, p.y - corner.y) <= corner.r
   if (settings) {
     const hit = onCorner ? { close: true } : settingsAt(p)
     if (hit?.close) closeSettings()
@@ -218,7 +219,7 @@ addEventListener('pointerdown', e => {
     return
   }
   const level = levelAt(p)
-  if (onCorner && corner.kind !== 'settings') togglePause()
+  if (onCorner && corner.kind === 'pause') togglePause()
   else if (onCorner) openSettings()
   else if (level) chooseLevel(level)
   else press()

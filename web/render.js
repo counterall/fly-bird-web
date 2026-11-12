@@ -115,18 +115,16 @@ const PICKUP_POP = 0.8 // s the "+1" floats up after a trinket is taken
 
 /**
  * The button in the screen's top-right corner, in logical units (main.js
- * hit-tests it): pause while a run is going, resume while it is paused, and
- * otherwise the gear that opens the settings. It follows the top of the screen, not of the playfield,
+ * hit-tests it): pause while a run is going, and otherwise the gear that opens
+ * the settings. While a run is paused there is none (null): a tap anywhere
+ * resumes. It follows the top of the screen, not of the playfield,
  * so it stays in the corner on tall phones; `view.inset` (logical px) keeps it
  * below a notch or status bar.
  */
 export function cornerButton(view, phase, paused, settings) {
-  return {
-    x: W - 30,
-    y: -view.top + (view.inset ?? 0) + 30,
-    r: 22,
-    kind: phase !== 'playing' || settings ? 'settings' : paused ? 'resume' : 'pause',
-  }
+  const kind = phase !== 'playing' || settings ? 'settings' : paused ? null : 'pause'
+  if (!kind) return null
+  return { x: W - 30, y: -view.top + (view.inset ?? 0) + 30, r: 22, kind }
 }
 /** The title screen's "Easy | Normal | Hard" toggle (centre and size); main.js hit-tests it. */
 export const LEVEL_TOGGLE = { x: W / 2, y: 314, w: 270, h: 40 }
@@ -662,8 +660,10 @@ function drawGameOver(c, g, best, touch) {
   if (since > CFG.restartDelay) text(c, touch ? 'Tap to continue' : 'Space to continue', W / 2, 364, 14)
 }
 
-/** The corner button: two bars to pause, a triangle to resume, otherwise a gear. */
-function drawCornerButton(c, { x, y, r, kind }) {
+/** The corner button, if any: two bars to pause, otherwise a gear. */
+function drawCornerButton(c, button) {
+  if (!button) return
+  const { x, y, r, kind } = button
   c.save()
   c.globalAlpha = 0.75
   c.fillStyle = 'rgba(30, 22, 60, 0.45)'
@@ -675,16 +675,6 @@ function drawCornerButton(c, { x, y, r, kind }) {
     c.beginPath()
     c.roundRect(x - 6, y - 7, 4, 14, 1.5)
     c.roundRect(x + 2, y - 7, 4, 14, 1.5)
-    c.fill()
-    c.restore()
-    return
-  }
-  if (kind === 'resume') {
-    c.beginPath()
-    c.moveTo(x - 4, y - 7.5)
-    c.lineTo(x + 7, y)
-    c.lineTo(x - 4, y + 7.5)
-    c.closePath()
     c.fill()
     c.restore()
     return
