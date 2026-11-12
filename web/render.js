@@ -368,19 +368,9 @@ function card(c, x, y, w, h) {
 
 const capital = s => s[0].toUpperCase() + s.slice(1)
 
-/** A medal of the given tier ('bronze' | 'silver' | 'gold'), or an empty slot. */
+/** A medal of the given tier ('bronze' | 'silver' | 'gold'). */
 function drawMedal(c, x, y, r, tier) {
   c.save()
-  if (!tier) {
-    c.strokeStyle = 'rgba(255, 248, 238, 0.25)'
-    c.lineWidth = 2
-    c.setLineDash([4, 4])
-    c.beginPath()
-    c.arc(x, y, r - 1, 0, Math.PI * 2)
-    c.stroke()
-    c.restore()
-    return
-  }
   const [face, rim] = MEDAL[tier]
   c.fillStyle = rim
   c.beginPath()
@@ -507,15 +497,19 @@ function drawGameOver(c, g, best, touch) {
   const next = nextMedal(g.score)
   card(c, W / 2 - 150, 166, 300, 222)
   text(c, 'Grounded', W / 2, 204, 32, GOLD)
-  // medal on the left, score and best on the right
-  drawMedal(c, 115, 284, 30, medal?.name)
-  text(c, medal ? capital(medal.name) : 'No medal', 115, 332, 13, medal ? MEDAL[medal.name][0] : 'rgba(255, 248, 238, 0.6)')
-  text(c, 'Score', 215, 250, 15)
-  text(c, `${capital(g.level)} best`, 295, 250, 15)
-  text(c, String(g.score), 215, 286, 38)
-  text(c, String(best), 295, 286, 38, isBest ? GOLD : INK)
-  if (isBest) text(c, 'New best!', 255, 322, 15, GOLD)
-  else if (next) text(c, `${capital(next.name)} at ${next.score}`, 255, 322, 13, 'rgba(255, 248, 238, 0.7)')
+  // with a medal: medal on the left, score and best on the right;
+  // without one: score and best centred
+  const mid = medal ? 255 : W / 2
+  if (medal) {
+    drawMedal(c, 115, 284, 30, medal.name)
+    text(c, capital(medal.name), 115, 332, 13, MEDAL[medal.name][0])
+  }
+  text(c, 'Score', mid - 40, 250, 15)
+  text(c, `${capital(g.level)} best`, mid + 40, 250, 15)
+  text(c, String(g.score), mid - 40, 286, 38)
+  text(c, String(best), mid + 40, 286, 38, isBest ? GOLD : INK)
+  if (isBest) text(c, 'New best!', mid, 322, 15, GOLD)
+  else if (next) text(c, `${capital(next.name)} at ${next.score}`, mid, 322, 13, 'rgba(255, 248, 238, 0.7)')
   if (since > CFG.restartDelay) text(c, touch ? 'Tap to continue' : 'Space to continue', W / 2, 364, 14)
 }
 
