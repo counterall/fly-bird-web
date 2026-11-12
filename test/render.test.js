@@ -3,15 +3,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { MEDALS, W, createGame } from '../web/game.js?v=dev'
-import { SETTINGS, SETTINGS_BUTTON, THEMES, THEME_NAMES, render, segmentAt, settingsAt } from '../web/render.js?v=dev'
+import { SETTINGS, THEMES, cornerButton, THEME_NAMES, render, segmentAt, settingsAt } from '../web/render.js?v=dev'
 
 function recordingContext() {
-  const calls = { text: [], dash: [], arc: [], fills: new Set(), stops: [] }
+  const calls = { text: [], dash: [], arc: [], rects: [], fills: new Set(), stops: [] }
   const stub = () => ({ addColorStop(_, col) { calls.stops.push(col) } })
   const c = new Proxy({}, {
     get(target, key) {
       if (key in target) return target[key]
       if (key === 'fillText') return (s, x, y) => calls.text.push({ s: String(s), x, y, color: target.fillStyle })
+      if (key === 'roundRect') return (x, y, w, h) => calls.rects.push({ x, y, w, h })
       if (key === 'arc') return (x, y, r) => calls.arc.push({ x, y, r })
       if (key === 'setLineDash') return d => calls.dash.push(d)
       if (key === 'measureText') return s => ({ width: String(s).length * 8 })
@@ -97,8 +98,25 @@ test('themes: purple (the original) first, then classic', () => {
   for (const name of THEME_NAMES) assert.ok(THEMES[name].label)
 })
 
-test('the gear sits top right, where the speaker button was', () => {
-  assert.ok(SETTINGS_BUTTON.x > 300 && SETTINGS_BUTTON.y < 60)
+test('the corner button sits at the top right of the screen, not of the playfield', () => {
+  const card = cornerButton({ top: 0, bottom: 0, ground: 520 }, 'ready', false, false)
+  assert.ok(card.x > 340 && card.y > 0 && card.y < 50)
+  // a tall phone: 180 logical px of extra sky above the playfield
+  const phone = cornerButton({ top: 180, bottom: 60, ground: 560 }, 'ready', false, false)
+  assert.equal(phone.x, card.x)
+  assert.equal(phone.y, card.y - 180)
+  // and below a notch / status bar (safe-area inset, in logical px)
+  const notch = cornerButton({ top: 180, bottom: 60, ground: 560, inset: 50 }, 'ready', false, false)
+  assert.equal(notch.y, phone.y + 50)
+})
+
+test('the corner button is a pause button during play, otherwise the gear', () => {
+  const view = { top: 0, bottom: 0, ground: 520 }
+  assert.equal(cornerButton(view, 'ready', false, false).kind, 'settings')
+  assert.equal(cornerButton(view, 'playing', false, false).kind, 'pause')
+  assert.equal(cornerButton(view, 'playing', true, false).kind, 'resume')
+  assert.equal(cornerButton(view, 'playing', true, true).kind, 'settings')
+  assert.equal(cornerButton(view, 'over', false, false).kind, 'settings')
 })
 
 test('the settings panel shows sound and theme, with the current choices highlighted', () => {
@@ -140,4 +158,17 @@ test('the theme changes the sky and the bird', () => {
   // no theme, or an unknown one, is purple
   assert.deepEqual(frame({}).stops, purple.stops)
   assert.deepEqual(frame({ theme: 'nope' }).stops, purple.stops)
+})
+
+test('the classic ground is all grass green, no brown soil', () => {
+  const t = THEMES.classic
+  assert.equal(t.groundBody, t.groundTop)
+  assert.equal(t.groundBodyNight, t.groundTopNight)
+})
+
+test('during a run the corner shows two pause bars', () => {
+  const b = cornerButton({ top: 0, bottom: 0, ground: 520 }, 'playing', false, false)
+  const bars = calls => calls.rects.filter(r => r.w === 4 && Math.abs(r.x + 2 - b.x) < 8 && Math.abs(r.y + r.h / 2 - b.y) < 2)
+  assert.equal(bars(frame({}, 'playing')).length, 2)
+  assert.equal(bars(frame({}, 'ready')).length, 0)
 })

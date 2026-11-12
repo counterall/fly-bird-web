@@ -1,6 +1,6 @@
 // Entry point: sizes the canvas to the window, runs the game loop and input.
 import { GROUND, H, LEVELS, W, createGame, flap, medalFor, step } from './game.js?v=dev'
-import { LEVEL_TOGGLE, SETTINGS_BUTTON, THEME_NAMES, render, segmentAt, settingsAt } from './render.js?v=dev'
+import { LEVEL_TOGGLE, THEME_NAMES, cornerButton, render, segmentAt, settingsAt } from './render.js?v=dev'
 import { createSound } from './sound.js?v=dev'
 
 const LS_BEST = level => `updraft:best:${level}`
@@ -73,7 +73,9 @@ function closeSettings() {
 
 // Extra logical sky above / ground below the 400×600 playfield, for screens
 // taller than 2:3. Gameplay happens in the same playfield on every device.
-const view = { top: 0, bottom: 0, ground: GROUND }
+const view = { top: 0, bottom: 0, ground: GROUND, inset: 0 } // inset: safe area at the top
+// An empty element padded by env(safe-area-inset-top): its padding is the notch.
+const safeProbe = document.getElementById('safe-top')
 const SKY_SHARE = 0.7 // share of the extra height given to the sky
 
 // Portrait / tall windows (phones): fill the whole window edge to edge.
@@ -93,10 +95,13 @@ function fit() {
     const hidden = Math.max(0, vh - (visualViewport?.height ?? vh)) * (W / vw)
     const visibleBottom = H + view.bottom - hidden
     view.ground = Math.max(GROUND, visibleBottom - (visibleBottom - GROUND) / 2)
+    // the notch / status bar, which the canvas runs under (viewport-fit=cover)
+    const safeTop = Number.parseFloat(getComputedStyle(safeProbe).paddingTop) || 0
+    view.inset = safeTop * (W / vw)
     canvas.style.width = `${vw}px`
     canvas.style.height = `${vh}px`
   } else {
-    view.top = view.bottom = 0
+    view.top = view.bottom = view.inset = 0
     view.ground = GROUND
     const margin = 24
     const scale = Math.min((vw - margin * 2) / W, (vh - margin * 2) / H)
@@ -195,23 +200,26 @@ addEventListener('keydown', e => {
   else if (/^Digit[1-9]$/.test(e.code) && LEVELS[e.code.slice(5) - 1]) { e.preventDefault(); chooseLevel(LEVELS[e.code.slice(5) - 1]) }
 })
 // Anywhere on the page counts as a flap, so phones don't need to aim at the
-// canvas; only the settings (gear and panel) and the level toggle are excluded.
+// canvas; only the corner button (pause / settings), the settings panel and
+// the level toggle are excluded.
 addEventListener('pointerdown', e => {
   if (e.button > 0) return
   e.preventDefault()
   touch = e.pointerType === 'touch'
   sound.unlock()
   const p = toLogical(e.clientX, e.clientY)
-  const onGear = Math.hypot(p.x - SETTINGS_BUTTON.x, p.y - SETTINGS_BUTTON.y) <= SETTINGS_BUTTON.r
+  const corner = cornerButton(view, g.phase, paused, settings)
+  const onCorner = Math.hypot(p.x - corner.x, p.y - corner.y) <= corner.r
   if (settings) {
-    const hit = onGear ? { close: true } : settingsAt(p)
+    const hit = onCorner ? { close: true } : settingsAt(p)
     if (hit?.close) closeSettings()
     else if (hit && 'muted' in hit) setMuted(hit.muted)
     else if (hit?.theme) chooseTheme(hit.theme)
     return
   }
   const level = levelAt(p)
-  if (onGear) openSettings()
+  if (onCorner && corner.kind !== 'settings') togglePause()
+  else if (onCorner) openSettings()
   else if (level) chooseLevel(level)
   else press()
 }, { passive: false })

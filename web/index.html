@@ -32,10 +32,12 @@
     }
     body.fill { background: transparent; }
     body.fill canvas { border-radius: 0; box-shadow: none; }
+    #safe-top { position: fixed; top: 0; height: 0; visibility: hidden; padding-top: env(safe-area-inset-top, 0px); }
     noscript { color: #fff8ee; font: 16px system-ui, sans-serif; }
   </style>
 </head>
 <body>
+  <div id="safe-top"></div> <!-- main.js reads the notch height from its padding -->
   <canvas id="game" aria-label="Updraft game: press Space or tap to flap"></canvas>
   <noscript>Updraft needs JavaScript.</noscript>
   <script type="module" src="./main.js?v=dev"></script>
