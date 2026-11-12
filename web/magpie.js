@@ -1,21 +1,27 @@
 // The magpie sprite, drawn with canvas paths. Used by the game renderer and
 // by drawIcon() for the home-screen icons.
 
-// Black with white belly and shoulder, blue-green sheen on wing and tail.
-const BLACK = '#17161d'
-const BLACK_FAR = '#0f0e14' // far wing, in the body's shadow
-const WHITE = '#f7f2ea'
-const BEAK = '#2b2a31'
-const SHEEN_WING = '#2f4f8f'
-const SHEEN_TAIL = '#2c6a6c'
-const RIM = 'rgba(255, 196, 150, 0.5)' // warm sunset rim light
+/**
+ * The magpie's colours: black with white belly and shoulder, blue-green sheen
+ * on wing and tail, and a warm sunset rim light. Themes can pass their own.
+ */
+export const MAGPIE = Object.freeze({
+  body: '#17161d',
+  bodyFar: '#0f0e14', // far wing, in the body's shadow
+  white: '#f7f2ea',
+  beak: '#2b2a31',
+  sheenWing: '#2f4f8f',
+  sheenTail: '#2c6a6c',
+  rim: 'rgba(255, 196, 150, 0.5)',
+  cross: '#f7f2ea', // the crossed-out eye after a crash
+})
 
 /**
  * The magpie at (x, y), facing right, in a ~45px unit box times `scale`.
  * `tilt` rotates it (positive noses down), `wing` > 0 raises the wing tip,
- * and `dead` crosses out the eye.
+ * `dead` crosses out the eye, and `colors` recolours it (see MAGPIE).
  */
-export function paintMagpie(c, x, y, tilt, scale, wing, dead) {
+export function paintMagpie(c, x, y, tilt, scale, wing, dead, colors = MAGPIE) {
   c.save()
   c.translate(x, y)
   c.rotate(tilt)
@@ -23,7 +29,7 @@ export function paintMagpie(c, x, y, tilt, scale, wing, dead) {
   c.lineJoin = 'round'
 
   // short tail: the body ends at x = -14; the tail tip sits at -21
-  c.fillStyle = BLACK
+  c.fillStyle = colors.body
   c.beginPath()
   c.moveTo(-8, -2)
   c.lineTo(-18, -2)
@@ -31,7 +37,7 @@ export function paintMagpie(c, x, y, tilt, scale, wing, dead) {
   c.lineTo(-8, 5)
   c.closePath()
   c.fill()
-  c.strokeStyle = SHEEN_TAIL
+  c.strokeStyle = colors.sheenTail
   c.lineWidth = 1.6
   c.beginPath()
   c.moveTo(-13, 1.5)
@@ -39,49 +45,49 @@ export function paintMagpie(c, x, y, tilt, scale, wing, dead) {
   c.stroke()
 
   // far wing (behind body), mirrored and darker
-  drawWing(c, -wing * 0.6, true)
+  drawWing(c, -wing * 0.6, true, colors)
 
   // body
-  c.fillStyle = BLACK
+  c.fillStyle = colors.body
   c.beginPath()
   c.ellipse(0, 1, 14, 9, 0, 0, Math.PI * 2)
   c.fill()
   // white belly
-  c.fillStyle = WHITE
+  c.fillStyle = colors.white
   c.beginPath()
   c.ellipse(1, 5, 9, 4.5, -0.1, 0, Math.PI * 2)
   c.fill()
 
   // head
-  c.fillStyle = BLACK
+  c.fillStyle = colors.body
   c.beginPath()
   c.arc(12, -4, 7, 0, Math.PI * 2)
   c.fill()
   // beak
-  c.fillStyle = BEAK
+  c.fillStyle = colors.beak
   c.beginPath()
   c.moveTo(17.5, -6)
   c.lineTo(25, -3.5)
   c.lineTo(17.5, -1.5)
   c.closePath()
   c.fill()
-  drawEye(c, dead)
+  drawEye(c, dead, colors.cross)
 
   // sunset rim light along the back of the head
-  c.strokeStyle = RIM
+  c.strokeStyle = colors.rim
   c.lineWidth = 1.2
   c.beginPath()
   c.arc(12, -4, 6.6, -Math.PI * 0.8, -Math.PI * 0.35)
   c.stroke()
 
   // near wing (in front of body)
-  drawWing(c, wing, false)
+  drawWing(c, wing, false, colors)
   c.restore()
 }
 
-function drawEye(c, dead) {
+function drawEye(c, dead, cross) {
   if (dead) {
-    c.strokeStyle = WHITE
+    c.strokeStyle = cross
     c.lineWidth = 1.3
     c.beginPath()
     c.moveTo(12.5, -7.5); c.lineTo(15.5, -4.5)
@@ -100,11 +106,11 @@ function drawEye(c, dead) {
 }
 
 /** Wing pivots at the shoulder and points backwards. */
-function drawWing(c, angle, far) {
+function drawWing(c, angle, far, colors) {
   c.save()
   c.translate(2, -2)
   c.rotate(-angle)
-  c.fillStyle = far ? BLACK_FAR : BLACK
+  c.fillStyle = far ? colors.bodyFar : colors.body
   c.beginPath()
   c.moveTo(4, -1)
   c.quadraticCurveTo(-6, -9, -21, -4)
@@ -114,11 +120,11 @@ function drawWing(c, angle, far) {
   c.fill()
   if (!far) {
     // white shoulder patch and blue sheen on the flight feathers
-    c.fillStyle = WHITE
+    c.fillStyle = colors.white
     c.beginPath()
     c.ellipse(-3, 0, 6, 2.6, -0.15, 0, Math.PI * 2)
     c.fill()
-    c.strokeStyle = SHEEN_WING
+    c.strokeStyle = colors.sheenWing
     c.lineWidth = 2
     c.beginPath()
     c.moveTo(-10, -3.5)
