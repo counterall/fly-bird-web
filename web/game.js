@@ -60,9 +60,9 @@ export const LEVELS = Object.freeze(Object.keys(LEVEL))
 
 /** Medals for a run, lowest first. */
 export const MEDALS = Object.freeze([
-  { name: 'bronze', score: 10 },
-  { name: 'silver', score: 25 },
-  { name: 'gold', score: 50 },
+  { name: 'bronze', score: 50 },
+  { name: 'silver', score: 150 },
+  { name: 'gold', score: 500 },
 ])
 export const medalFor = score => MEDALS.findLast(m => score >= m.score) ?? null
 export const nextMedal = score => MEDALS.find(m => score < m.score) ?? null
