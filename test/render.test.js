@@ -110,11 +110,11 @@ test('the corner button sits at the top right of the screen, not of the playfiel
   assert.equal(notch.y, phone.y + 50)
 })
 
-test('the corner button is a pause button during play, otherwise the gear', () => {
+test('the corner button is a pause button during play, hidden while paused, otherwise the gear', () => {
   const view = { top: 0, bottom: 0, ground: 520 }
   assert.equal(cornerButton(view, 'ready', false, false).kind, 'settings')
   assert.equal(cornerButton(view, 'playing', false, false).kind, 'pause')
-  assert.equal(cornerButton(view, 'playing', true, false).kind, 'resume')
+  assert.equal(cornerButton(view, 'playing', true, false), null)
   assert.equal(cornerButton(view, 'playing', true, true).kind, 'settings')
   assert.equal(cornerButton(view, 'over', false, false).kind, 'settings')
 })
@@ -171,4 +171,15 @@ test('during a run the corner shows two pause bars', () => {
   const bars = calls => calls.rects.filter(r => r.w === 4 && Math.abs(r.x + 2 - b.x) < 8 && Math.abs(r.y + r.h / 2 - b.y) < 2)
   assert.equal(bars(frame({}, 'playing')).length, 2)
   assert.equal(bars(frame({}, 'ready')).length, 0)
+})
+
+test('while a run is paused nothing is drawn in the corner', () => {
+  const b = cornerButton({ top: 0, bottom: 0, ground: 520 }, 'playing', false, false)
+  const disc = calls => calls.arc.filter(a => Math.hypot(a.x - b.x, a.y - b.y) < 1)
+  assert.ok(disc(frame({}, 'playing')).length > 0, 'the pause button is drawn during play')
+  const paused = frame({ paused: true }, 'playing')
+  assert.deepEqual(disc(paused), [])
+  assert.ok(at(paused, 'Paused'), 'the pause screen still shows')
+  // defensive: if the settings were ever open during a paused run, the gear closes them
+  assert.ok(disc(frame({ paused: true, settings: true }, 'playing')).length > 0)
 })
