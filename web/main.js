@@ -1,12 +1,13 @@
 // Entry point: sizes the canvas to the window, runs the game loop and input.
 import { GROUND, H, LEVELS, W, createGame, flap, medalFor, step } from './game.js?v=dev'
-import { LEVEL_TOGGLE, MUTE_BUTTON, render } from './render.js?v=dev'
+import { LEVEL_TOGGLE, SETTINGS_BUTTON, THEME_NAMES, render, segmentAt, settingsAt } from './render.js?v=dev'
 import { createSound } from './sound.js?v=dev'
 
 const LS_BEST = level => `updraft:best:${level}`
 const LS_BEST_OLD = 'updraft:best' // before levels: the game that is now normal
 const LS_LEVEL = 'updraft:level'
 const LS_MUTED = 'updraft:muted'
+const LS_THEME = 'updraft:theme'
 
 // localStorage can be unavailable (private mode, blocked site data).
 function load(key) {
@@ -26,7 +27,9 @@ if (load(LS_BEST('normal')) === null && load(LS_BEST_OLD) !== null) store(LS_BES
 const bests = Object.fromEntries(LEVELS.map(l => [l, Number.parseInt(load(LS_BEST(l)) ?? '0', 10) || 0]))
 let g = createGame(LEVELS.includes(load(LS_LEVEL)) ? load(LS_LEVEL) : 'easy')
 const sound = createSound(load(LS_MUTED) === '1')
+let theme = THEME_NAMES.includes(load(LS_THEME)) ? load(LS_THEME) : THEME_NAMES[0]
 let paused = false
+let settings = false // the settings panel is open
 let touch = matchMedia('(pointer: coarse)').matches
 let last = performance.now()
 
@@ -45,6 +48,27 @@ function chooseLevel(level) {
 
 function toggleMute() {
   store(LS_MUTED, sound.toggle() ? '1' : '0')
+}
+
+function setMuted(muted) {
+  if (sound.muted !== muted) toggleMute()
+}
+
+function chooseTheme(name) {
+  theme = name
+  store(LS_THEME, name)
+}
+
+/** Open the settings; a run in progress pauses underneath. */
+function openSettings() {
+  if (g.phase === 'playing') paused = true
+  settings = true
+}
+
+/** Close the settings; a paused run stays paused until the next tap. */
+function closeSettings() {
+  settings = false
+  last = performance.now()
 }
 
 // Extra logical sky above / ground below the 400×600 playfield, for screens
@@ -130,7 +154,7 @@ function frame(now) {
   const sx = pw / W
   const sy = ph / (H + view.top + view.bottom)
   c.setTransform(sx, 0, 0, sy, 0, view.top * sy)
-  render(c, g, { best: bests[g.level], paused, touch, muted: sound.muted }, view)
+  render(c, g, { best: bests[g.level], paused, touch, muted: sound.muted, settings, theme }, view)
   requestAnimationFrame(frame)
 }
 requestAnimationFrame(frame)
@@ -145,11 +169,9 @@ function toLogical(clientX, clientY) {
 }
 
 /** The level whose segment of the title-screen toggle is at p, if any. */
-function levelAt({ x, y }) {
-  const t = LEVEL_TOGGLE
-  if (g.phase !== 'ready' || Math.abs(x - t.x) > t.w / 2 || Math.abs(y - t.y) > t.h / 2) return null
-  const i = Math.floor(((x - (t.x - t.w / 2)) / t.w) * LEVELS.length)
-  return LEVELS[Math.min(LEVELS.length - 1, Math.max(0, i))]
+function levelAt(p) {
+  if (g.phase !== 'ready') return null
+  return LEVELS[segmentAt(LEVEL_TOGGLE, LEVELS.length, p)] ?? null
 }
 
 /** The level `by` steps from the current one, stopping at the ends. */
@@ -158,6 +180,13 @@ const levelBy = by => LEVELS[Math.min(LEVELS.length - 1, Math.max(0, LEVELS.inde
 addEventListener('keydown', e => {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return
   sound.unlock()
+  if (settings) {
+    // only Esc (close) and M (sound) work while the settings are open
+    if (e.code === 'Escape') { e.preventDefault(); closeSettings() }
+    else if (e.code === 'KeyM') { e.preventDefault(); toggleMute() }
+    else if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault()
+    return
+  }
   if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); touch = false; press() }
   else if (e.code === 'KeyP' || e.code === 'Escape') { e.preventDefault(); togglePause() }
   else if (e.code === 'KeyM') { e.preventDefault(); toggleMute() }
@@ -166,15 +195,23 @@ addEventListener('keydown', e => {
   else if (/^Digit[1-9]$/.test(e.code) && LEVELS[e.code.slice(5) - 1]) { e.preventDefault(); chooseLevel(LEVELS[e.code.slice(5) - 1]) }
 })
 // Anywhere on the page counts as a flap, so phones don't need to aim at the
-// canvas; only the mute button and the level toggle are excluded.
+// canvas; only the settings (gear and panel) and the level toggle are excluded.
 addEventListener('pointerdown', e => {
   if (e.button > 0) return
   e.preventDefault()
   touch = e.pointerType === 'touch'
   sound.unlock()
   const p = toLogical(e.clientX, e.clientY)
+  const onGear = Math.hypot(p.x - SETTINGS_BUTTON.x, p.y - SETTINGS_BUTTON.y) <= SETTINGS_BUTTON.r
+  if (settings) {
+    const hit = onGear ? { close: true } : settingsAt(p)
+    if (hit?.close) closeSettings()
+    else if (hit && 'muted' in hit) setMuted(hit.muted)
+    else if (hit?.theme) chooseTheme(hit.theme)
+    return
+  }
   const level = levelAt(p)
-  if (Math.hypot(p.x - MUTE_BUTTON.x, p.y - MUTE_BUTTON.y) <= MUTE_BUTTON.r) toggleMute()
+  if (onGear) openSettings()
   else if (level) chooseLevel(level)
   else press()
 }, { passive: false })

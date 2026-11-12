@@ -1,40 +1,98 @@
 // Canvas renderer for Updraft. Draws one frame of a game from game.js onto a
 // 2D context already scaled to the W×H logical playfield.
 import { CFG, GROUND, H, LEVEL, LEVELS, W, medalFor, nextMedal, trinketPos } from './game.js?v=dev'
-import { paintMagpie } from './magpie.js?v=dev'
+import { MAGPIE, paintMagpie } from './magpie.js?v=dev'
 
 // ── palette ────────────────────────────────────────────────────────────────
-// The sky turns from dusk to night over a run; *_NIGHT is the far end.
-const SKY = ['#2b2560', '#5b3f86', '#c4627a', '#f4a76a']
-const SKY_NIGHT = ['#0e0c26', '#1b1946', '#2c2862', '#4a3a6e']
-const SKY_TOP = '#1a1640' // top of the extra sky on tall screens
-const SKY_TOP_NIGHT = '#08071a'
-const SUN = [255, 214, 160]
-const SUN_NIGHT = [240, 130, 96] // reddens as it sets
+// Each theme colours the same scene. The sky turns from dusk (or day) to night
+// over a run; the *Night colours are the far end.
+export const THEMES = Object.freeze({
+  purple: {
+    label: 'Purple',
+    sky: ['#2b2560', '#5b3f86', '#c4627a', '#f4a76a'],
+    skyNight: ['#0e0c26', '#1b1946', '#2c2862', '#4a3a6e'],
+    skyTop: '#1a1640', // top of the extra sky on tall screens
+    skyTopNight: '#08071a',
+    sun: [255, 214, 160],
+    sunNight: [240, 130, 96], // reddens as it sets
+    duskStars: true, // stars show high up even at dusk
+    cloud: [255, 235, 225],
+    cloudAlpha: [0.22, 0.1],
+    hillFar: '#6a4a86',
+    hillFarNight: '#2f2752',
+    hillNear: '#3d3268',
+    hillNearNight: '#1d1838',
+    // pillars: dusk-lit plum stone, rim-lit on the sun side (right) in peach
+    stone: '#523b7c',
+    stoneShade: '#3c2b5f',
+    stoneRim: '#f4a77a',
+    stoneCourse: 'rgba(255, 200, 170, 0.10)',
+    stoneCap: '#664a92',
+    capGlow: '#ffc993',
+    groundTop: '#2c5a5a',
+    groundTopNight: '#1e4141',
+    groundBody: '#1f3f45',
+    groundBodyNight: '#152c31',
+    groundStripe: 'rgba(255, 255, 255, 0.08)',
+    meadow: false,
+    draft: [255, 214, 170],
+    chevron: 'rgba(255, 236, 214, 0.55)',
+    bird: MAGPIE,
+  },
+  classic: {
+    label: 'Classic',
+    sky: ['#3f97d6', '#62b2e6', '#93cfee', '#cfeaf3'],
+    skyNight: ['#0b1734', '#13254b', '#1d365f', '#2c4a72'],
+    skyTop: '#337fc0',
+    skyTopNight: '#07102a',
+    sun: [255, 240, 170],
+    sunNight: [255, 168, 96],
+    duskStars: false,
+    cloud: [255, 255, 255],
+    cloudAlpha: [0.85, 0.2],
+    hillFar: '#9fd49a',
+    hillFarNight: '#2b4a4c',
+    hillNear: '#6cbd68',
+    hillNearNight: '#1f3d36',
+    // pillars: sandstone under caps of green moss
+    stone: '#d6b27a',
+    stoneShade: '#b88f58',
+    stoneRim: '#fff0c4',
+    stoneCourse: 'rgba(110, 70, 30, 0.22)',
+    stoneCap: '#5aa83c',
+    capGlow: '#c9f28c',
+    groundTop: '#5cb043', // grass
+    groundTopNight: '#2a5224',
+    groundBody: '#6b4a32', // dark soil
+    groundBodyNight: '#3a2a20',
+    groundStripe: 'rgba(0, 0, 0, 0)', // no stripes: the meadow moves instead
+    meadow: true, // grass tufts and flowers along the ground
+    draft: [40, 110, 180], // updraft band
+    chevron: 'rgba(30, 80, 150, 0.5)',
+    bird: {
+      body: '#f4c430',
+      bodyFar: '#c99a18',
+      white: '#fff7dc',
+      beak: '#f08a24',
+      sheenWing: '#e2862a',
+      sheenTail: '#d99a1c',
+      rim: 'rgba(255, 255, 255, 0.55)',
+      cross: '#5a3a10',
+    },
+  },
+})
+export const THEME_NAMES = Object.freeze(Object.keys(THEMES))
+let T = THEMES.purple // the theme of the frame being drawn
+
 const MOON = '#f3ecdc'
 const STAR = '#fff4e6'
-const HILL_FAR = '#6a4a86'
-const HILL_FAR_NIGHT = '#2f2752'
-const HILL_NEAR = '#3d3268'
-const HILL_NEAR_NIGHT = '#1d1838'
-// Pillars: dusk-lit plum stone, rim-lit on the sun side (right) in peach.
-const STONE = '#523b7c'
-const STONE_SHADE = '#3c2b5f'
-const STONE_RIM = '#f4a77a'
-const STONE_COURSE = 'rgba(255, 200, 170, 0.10)'
-const STONE_CAP = '#664a92'
-const CAP_GLOW = '#ffc993'
-const GROUND_TOP = '#2c5a5a'
-const GROUND_TOP_NIGHT = '#1e4141'
-const GROUND_BODY = '#1f3f45'
-const GROUND_BODY_NIGHT = '#152c31'
-const GROUND_STRIPE = 'rgba(255, 255, 255, 0.08)'
 // Overlays
 const INK = '#fff8ee'
 const INK_OUTLINE = 'rgba(30, 20, 60, 0.75)'
 const GOLD = '#ffd6a0'
 const CARD = 'rgba(30, 22, 60, 0.72)'
 const CARD_INK = '#2a1f4d' // dark text on a gold highlight
+const PANEL = 'rgba(36, 27, 70, 0.96)' // the settings panel: nearly solid
 const DIM = 'rgba(20, 14, 40, 0.45)'
 // Trinket: a gold ring set with a blue-green stone
 const RING = '#ffcf6b'
@@ -55,10 +113,38 @@ const MEDAL_TOAST = 1.6 // s the "medal!" message shows after earning one
 const TRINKET_SCALE = 1.4 // visual only; the pickup radius is CFG.trinketR
 const PICKUP_POP = 0.8 // s the "+1" floats up after a trinket is taken
 
-/** The sound toggle, top-right, in logical units; main.js hit-tests it. */
-export const MUTE_BUTTON = { x: W - 30, y: 30, r: 22 }
-/** The title screen's "Easy | Hard" toggle (centre and size); main.js hit-tests it. */
+/** The gear that opens the settings, top-right, in logical units; main.js hit-tests it. */
+export const SETTINGS_BUTTON = { x: W - 30, y: 30, r: 22 }
+/** The title screen's "Easy | Normal | Hard" toggle (centre and size); main.js hit-tests it. */
 export const LEVEL_TOGGLE = { x: W / 2, y: 314, w: 270, h: 40 }
+/** The settings panel (centre and size) and the controls on it. */
+export const SETTINGS = Object.freeze({
+  x: W / 2, y: 300, w: 300, h: 260,
+  sound: { x: W / 2, y: 268, w: 200, h: 38 }, // On | Off
+  theme: { x: W / 2, y: 344, w: 240, h: 38 }, // one segment per theme
+  done: { x: W / 2, y: 398, w: 120, h: 36 },
+})
+
+const within = (r, { x, y }) => Math.abs(x - r.x) <= r.w / 2 && Math.abs(y - r.y) <= r.h / 2
+
+/** Index of the segment of an n-way toggle `r` (centre and size) under p, or -1. */
+export function segmentAt(r, n, p) {
+  if (!within(r, p)) return -1
+  return Math.min(n - 1, Math.max(0, Math.floor(((p.x - (r.x - r.w / 2)) / r.w) * n)))
+}
+
+/**
+ * What a tap at p does while the settings are open: { muted }, { theme },
+ * { close } (Done, or anywhere outside the panel), or null (the panel itself).
+ */
+export function settingsAt(p) {
+  const sound = segmentAt(SETTINGS.sound, 2, p)
+  if (sound >= 0) return { muted: sound === 1 }
+  const theme = segmentAt(SETTINGS.theme, THEME_NAMES.length, p)
+  if (theme >= 0) return { theme: THEME_NAMES[theme] }
+  if (within(SETTINGS.done, p) || !within(SETTINGS, p)) return { close: true }
+  return null
+}
 
 // ── colour helpers ─────────────────────────────────────────────────────────
 const rgb = hex => [1, 3, 5].map(i => Number.parseInt(hex.slice(i, i + 2), 16))
@@ -79,8 +165,8 @@ const nightFor = g => smooth(clamp01(g.dist / NIGHT_DIST))
 function drawSky(c, top, ground, bottom, night) {
   const sky = c.createLinearGradient(0, -top, 0, ground)
   const span = ground + top
-  sky.addColorStop(0, top > 0 ? mix(SKY_TOP, SKY_TOP_NIGHT, night) : mix(SKY[0], SKY_NIGHT[0], night))
-  SKY.forEach((col, i) => sky.addColorStop((top + (i / (SKY.length - 1)) * ground) / span, mix(col, SKY_NIGHT[i], night)))
+  sky.addColorStop(0, top > 0 ? mix(T.skyTop, T.skyTopNight, night) : mix(T.sky[0], T.skyNight[0], night))
+  T.sky.forEach((col, i) => sky.addColorStop((top + (i / (T.sky.length - 1)) * ground) / span, mix(col, T.skyNight[i], night)))
   c.fillStyle = sky
   c.fillRect(0, -top, W, bottom + top)
 }
@@ -100,7 +186,7 @@ function drawStars(c, top, t, night) {
   for (const s of STARS) {
     if (s.y < -top) continue
     // fade out towards the warmer part of the sky
-    const fade = clamp01((limit - s.y) / 160)
+    const fade = clamp01((limit - s.y) / 160) * (T.duskStars ? 1 : night)
     if (fade === 0) continue
     c.globalAlpha = fade * (0.45 + 0.25 * Math.sin(t * 1.3 + s.phase))
     c.beginPath()
@@ -112,7 +198,7 @@ function drawStars(c, top, t, night) {
 
 /** The sun sinks behind the hills as night falls. */
 function drawSun(c, night) {
-  c.fillStyle = mix(SUN, SUN_NIGHT, night, 0.9)
+  c.fillStyle = mix(T.sun, T.sunNight, night, 0.9)
   c.beginPath()
   c.arc(W * 0.72, lerp(GROUND - 150, GROUND + 60, night), 54, 0, Math.PI * 2)
   c.fill()
@@ -146,7 +232,7 @@ function drawMoon(c, night) {
 }
 
 function drawClouds(c, scroll, night) {
-  c.fillStyle = `rgba(255, 235, 225, ${lerp(0.22, 0.1, night)})`
+  c.fillStyle = `rgba(${T.cloud.join(', ')}, ${lerp(T.cloudAlpha[0], T.cloudAlpha[1], night)})`
   const span = W + 160
   for (let i = 0; i < 4; i++) {
     const x = ((i * 137 - scroll * 0.12) % span + span) % span - 80
@@ -179,30 +265,30 @@ const COURSE_H = 34 // height of one course of stone blocks
 /** One pillar half from y to y + h; the cap sits on the end facing the gap. */
 function drawPillarPart(c, x, y, h, capAtBottom) {
   const w = CFG.pillarW
-  c.fillStyle = STONE
+  c.fillStyle = T.stone
   c.fillRect(x + 4, y, w - 8, h)
   // shadow on the side away from the sun, warm rim light on the sun side
-  c.fillStyle = STONE_SHADE
+  c.fillStyle = T.stoneShade
   c.fillRect(x + 4, y, 12, h)
-  c.fillStyle = STONE_RIM
+  c.fillStyle = T.stoneRim
   c.globalAlpha = 0.85
   c.fillRect(x + w - 7, y, 3, h)
   c.globalAlpha = 1
   // stone courses, counted from the cap so they line up with it
-  c.fillStyle = STONE_COURSE
+  c.fillStyle = T.stoneCourse
   for (let k = 1; k * COURSE_H < h; k++) {
     const yy = capAtBottom ? y + h - k * COURSE_H : y + k * COURSE_H
     c.fillRect(x + 4, yy, w - 8, 2)
   }
   // cap, with a glowing edge facing the gap
   const capY = capAtBottom ? y + h - 16 : y
-  c.fillStyle = STONE_CAP
+  c.fillStyle = T.stoneCap
   c.beginPath()
   c.roundRect(x, capY, w, 16, 4)
   c.fill()
-  c.fillStyle = CAP_GLOW
+  c.fillStyle = T.capGlow
   c.fillRect(x + 3, capAtBottom ? capY + 13 : capY + 1, w - 6, 2)
-  c.fillStyle = STONE_RIM
+  c.fillStyle = T.stoneRim
   c.fillRect(x + w - 4, capY + 3, 2, 10)
 }
 
@@ -223,13 +309,14 @@ function drawDrafts(c, g, top, ground) {
   const w = CFG.draftW
   for (const d of g.drafts) {
     const band = c.createLinearGradient(d.x, 0, d.x + w, 0)
-    band.addColorStop(0, 'rgba(255, 214, 170, 0)')
-    band.addColorStop(0.5, 'rgba(255, 214, 170, 0.16)')
-    band.addColorStop(1, 'rgba(255, 214, 170, 0)')
+    const air = T.draft.join(', ')
+    band.addColorStop(0, `rgba(${air}, 0)`)
+    band.addColorStop(0.5, `rgba(${air}, 0.16)`)
+    band.addColorStop(1, `rgba(${air}, 0)`)
     c.fillStyle = band
     c.fillRect(d.x, -top, w, ground + top)
     // chevrons in three lanes, rising and fading in and out
-    c.strokeStyle = 'rgba(255, 236, 214, 0.55)'
+    c.strokeStyle = T.chevron
     c.lineWidth = 2
     c.lineCap = 'round'
     c.lineJoin = 'round'
@@ -312,13 +399,58 @@ function drawTrinkets(c, g) {
 }
 
 function drawGround(c, scroll, ground, bottom, night) {
-  c.fillStyle = mix(GROUND_BODY, GROUND_BODY_NIGHT, night)
+  c.fillStyle = mix(T.groundBody, T.groundBodyNight, night)
   c.fillRect(0, ground, W, bottom - ground)
-  c.fillStyle = mix(GROUND_TOP, GROUND_TOP_NIGHT, night)
+  c.fillStyle = mix(T.groundTop, T.groundTopNight, night)
   c.fillRect(0, ground, W, 10)
-  c.fillStyle = GROUND_STRIPE
+  c.fillStyle = T.groundStripe
   const off = scroll % 28
   for (let x = -off; x < W; x += 28) c.fillRect(x, ground + 18, 14, 3)
+  if (T.meadow) drawMeadow(c, scroll, ground, night)
+}
+
+// Grass tufts and flowers along the ground, repeating every MEADOW px.
+const MEADOW = 240
+const TUFTS = Array.from({ length: 16 }, (_, i) => ({ x: (i * 151) % MEADOW, h: 5 + ((i * 7) % 4) }))
+const FLOWERS = Array.from({ length: 7 }, (_, i) => ({
+  x: (i * 71 + 23) % MEADOW,
+  h: 7 + ((i * 5) % 6),
+  color: ['#fff7f0', '#ffd84a', '#ff8fb1', '#fff7f0', '#c9a6ff', '#ffd84a', '#ff8fb1'][i],
+}))
+
+function drawMeadow(c, scroll, ground, night) {
+  const off = scroll % MEADOW
+  c.strokeStyle = mix(T.groundTop, '#2f7a2a', 0.5 + night * 0.3)
+  c.lineWidth = 2
+  c.lineCap = 'round'
+  c.beginPath()
+  for (let base = -off; base < W + MEADOW; base += MEADOW) {
+    for (const t of TUFTS) {
+      const x = base + t.x
+      if (x < -6 || x > W + 6) continue
+      c.moveTo(x - 3, ground + 1); c.lineTo(x - 4, ground - t.h + 2)
+      c.moveTo(x, ground + 1); c.lineTo(x, ground - t.h)
+      c.moveTo(x + 3, ground + 1); c.lineTo(x + 4, ground - t.h + 2)
+    }
+  }
+  c.stroke()
+  for (let base = -off; base < W + MEADOW; base += MEADOW) {
+    for (const f of FLOWERS) {
+      const x = base + f.x
+      if (x < -6 || x > W + 6) continue
+      const y = ground - f.h
+      c.strokeStyle = '#3f8f32'
+      c.lineWidth = 1.5
+      c.beginPath(); c.moveTo(x, ground + 1); c.lineTo(x, y); c.stroke()
+      c.fillStyle = mix(f.color, '#3a3a5a', night * 0.6)
+      for (let k = 0; k < 5; k++) {
+        const a = (k / 5) * Math.PI * 2
+        c.beginPath(); c.arc(x + Math.cos(a) * 2.4, y + Math.sin(a) * 2.4, 1.9, 0, Math.PI * 2); c.fill()
+      }
+      c.fillStyle = '#f6a623'
+      c.beginPath(); c.arc(x, y, 1.6, 0, Math.PI * 2); c.fill()
+    }
+  }
 }
 
 // ── the magpie in play ─────────────────────────────────────────────────────
@@ -341,7 +473,7 @@ function tiltFor(g) {
 function drawMagpie(c, g) {
   // a ghost (just hit, with a life to spare) blinks
   c.globalAlpha = g.ghost && Math.floor(g.t * 12) % 2 ? 0.3 : 1
-  paintMagpie(c, CFG.birdX, g.y, tiltFor(g), MAGPIE_SCALE, wingAngle(g), g.phase === 'over')
+  paintMagpie(c, CFG.birdX, g.y, tiltFor(g), MAGPIE_SCALE, wingAngle(g), g.phase === 'over', T.bird)
   c.globalAlpha = 1
 }
 
@@ -399,16 +531,15 @@ function drawMedal(c, x, y, r, tier) {
   c.restore()
 }
 
-/** "Easy | Normal | Hard" pill: one equal segment per level, the chosen one highlighted. */
-function drawLevelToggle(c, level) {
-  const { x, y, w, h } = LEVEL_TOGGLE
-  const seg = w / LEVELS.length
+/** A pill toggle at r (centre and size): one equal segment per label, segment i highlighted. */
+function drawSegments(c, r, labels, i) {
+  const { x, y, w, h } = r
+  const seg = w / labels.length
   const left = x - w / 2
   c.fillStyle = CARD
   c.beginPath()
   c.roundRect(left, y - h / 2, w, h, h / 2)
   c.fill()
-  const i = LEVELS.indexOf(level)
   c.fillStyle = GOLD
   c.beginPath()
   c.roundRect(left + i * seg + 3, y - h / 2 + 3, seg - 6, h - 6, (h - 6) / 2)
@@ -416,10 +547,15 @@ function drawLevelToggle(c, level) {
   c.font = `800 16px ${FONT}`
   c.textAlign = 'center'
   c.textBaseline = 'middle'
-  LEVELS.forEach((l, j) => {
+  labels.forEach((l, j) => {
     c.fillStyle = j === i ? CARD_INK : INK
-    c.fillText(capital(l), left + (j + 0.5) * seg, y + 1)
+    c.fillText(l, left + (j + 0.5) * seg, y + 1)
   })
+}
+
+/** "Easy | Normal | Hard" on the title screen. */
+function drawLevelToggle(c, level) {
+  drawSegments(c, LEVEL_TOGGLE, LEVELS.map(capital), LEVELS.indexOf(level))
 }
 
 const LEVEL_BLURB = {
@@ -513,36 +649,53 @@ function drawGameOver(c, g, best, touch) {
   if (since > CFG.restartDelay) text(c, touch ? 'Tap to continue' : 'Space to continue', W / 2, 364, 14)
 }
 
-/** Speaker icon, crossed out when muted. */
-function drawMuteButton(c, muted) {
-  const { x, y, r } = MUTE_BUTTON
+/** The gear button that opens the settings. */
+function drawSettingsButton(c) {
+  const { x, y, r } = SETTINGS_BUTTON
   c.save()
   c.globalAlpha = 0.75
   c.fillStyle = 'rgba(30, 22, 60, 0.45)'
   c.beginPath()
   c.arc(x, y, r * 0.75, 0, Math.PI * 2)
   c.fill()
+  // eight teeth around a ring
   c.fillStyle = INK
-  c.strokeStyle = INK
-  c.lineWidth = 1.8
-  c.lineCap = 'round'
-  // speaker
   c.beginPath()
-  c.moveTo(x - 8, y - 3); c.lineTo(x - 4, y - 3); c.lineTo(x + 1, y - 8)
-  c.lineTo(x + 1, y + 8); c.lineTo(x - 4, y + 3); c.lineTo(x - 8, y + 3)
-  c.closePath()
-  c.fill()
-  c.beginPath()
-  if (muted) {
-    c.moveTo(x + 4, y - 4); c.lineTo(x + 10, y + 4)
-    c.moveTo(x + 10, y - 4); c.lineTo(x + 4, y + 4)
-  } else {
-    c.arc(x + 2, y, 5, -0.9, 0.9)
-    c.moveTo(x + 2 + 9 * Math.cos(-0.9), y + 9 * Math.sin(-0.9))
-    c.arc(x + 2, y, 9, -0.9, 0.9)
+  for (let k = 0; k < 16; k++) {
+    const a = (k / 16) * Math.PI * 2 - Math.PI / 16
+    const rr = k % 2 ? 7 : 9.5
+    c.arc(x, y, rr, a, a + Math.PI / 8)
   }
-  c.stroke()
+  c.closePath()
+  c.moveTo(x + 3.2, y)
+  c.arc(x, y, 3.2, 0, Math.PI * 2, true) // the hole
+  c.fill('evenodd')
   c.restore()
+}
+
+/** The settings panel: sound on / off, the theme, and Done. */
+function drawSettings(c, top, bottom, muted, themeName) {
+  c.fillStyle = DIM
+  c.fillRect(0, -top, W, bottom + top)
+  const { x, y, w, h, sound, theme, done } = SETTINGS
+  c.fillStyle = PANEL
+  c.beginPath()
+  c.roundRect(x - w / 2, y - h / 2, w, h, 16)
+  c.fill()
+  text(c, 'Settings', x, y - h / 2 + 26, 26, GOLD)
+  text(c, 'Sound', x, sound.y - 32, 14, 'rgba(255, 248, 238, 0.8)')
+  drawSegments(c, sound, ['On', 'Off'], muted ? 1 : 0)
+  text(c, 'Theme', x, theme.y - 32, 14, 'rgba(255, 248, 238, 0.8)')
+  drawSegments(c, theme, THEME_NAMES.map(n => THEMES[n].label), THEME_NAMES.indexOf(themeName))
+  c.fillStyle = GOLD
+  c.beginPath()
+  c.roundRect(done.x - done.w / 2, done.y - done.h / 2, done.w, done.h, done.h / 2)
+  c.fill()
+  c.font = `800 16px ${FONT}`
+  c.textAlign = 'center'
+  c.textBaseline = 'middle'
+  c.fillStyle = CARD_INK
+  c.fillText('Done', done.x, done.y + 1)
 }
 
 function drawPaused(c, top, bottom, touch) {
@@ -553,13 +706,16 @@ function drawPaused(c, top, bottom, touch) {
 }
 
 /**
- * Draw one frame. `ui` is { best, paused, touch, muted }. `view.top` /
+ * Draw one frame. `ui` is { best, paused, touch, muted, settings, theme }:
+ * `settings` shows the settings panel, `theme` is a THEMES key (default purple). `view.top` /
  * `view.bottom` are extra logical pixels shown above y = 0 and below y = H on
  * screens taller than 2:3 (phones), and `view.ground` is the ground line
  * there. The playfield itself is unchanged; the sky and ground just extend.
  */
 export function render(c, g, ui, view = { top: 0, bottom: 0, ground: GROUND }) {
-  const { best, paused, touch, muted } = ui
+  const { best, paused, touch, muted, settings } = ui
+  const themeName = Object.hasOwn(THEMES, ui.theme ?? '') ? ui.theme : 'purple'
+  T = THEMES[themeName]
   const top = view.top
   const bottom = H + view.bottom
   const ground = view.ground
@@ -570,23 +726,26 @@ export function render(c, g, ui, view = { top: 0, bottom: 0, ground: GROUND }) {
   drawMoon(c, night)
   drawSun(c, night)
   drawClouds(c, g.scroll, night)
-  drawHills(c, g.scroll, 0.2, 1.7, 60, GROUND - 90, mix(HILL_FAR, HILL_FAR_NIGHT, night), ground)
-  drawHills(c, g.scroll, 0.45, 4.2, 40, GROUND - 30, mix(HILL_NEAR, HILL_NEAR_NIGHT, night), ground)
+  drawHills(c, g.scroll, 0.2, 1.7, 60, GROUND - 90, mix(T.hillFar, T.hillFarNight, night), ground)
+  drawHills(c, g.scroll, 0.45, 4.2, 40, GROUND - 30, mix(T.hillNear, T.hillNearNight, night), ground)
   drawDrafts(c, g, top, ground)
   drawPillars(c, g.pillars, top, ground)
   drawTrinkets(c, g)
   drawGround(c, g.scroll, ground, bottom, night)
   drawMagpie(c, g)
 
-  if (g.phase === 'playing') {
-    text(c, String(g.score), W / 2, 64, 52)
-    drawLives(c, g)
-    drawMedalToast(c, g)
-  } else if (g.phase === 'ready') drawTitle(c, g.level, best, touch)
-  else drawGameOver(c, g, best, touch)
-
-  if (paused) drawPaused(c, top, bottom, touch)
-  drawMuteButton(c, muted)
+  // the settings panel replaces the title, score and pause screens while open
+  if (settings) drawSettings(c, top, bottom, muted, themeName)
+  else {
+    if (g.phase === 'playing') {
+      text(c, String(g.score), W / 2, 64, 52)
+      drawLives(c, g)
+      drawMedalToast(c, g)
+    } else if (g.phase === 'ready') drawTitle(c, g.level, best, touch)
+    else drawGameOver(c, g, best, touch)
+    if (paused) drawPaused(c, top, bottom, touch)
+  }
+  drawSettingsButton(c)
 }
 
 // ── app icon ───────────────────────────────────────────────────────────────
@@ -596,13 +755,14 @@ export function render(c, g, ui, view = { top: 0, bottom: 0, ground: GROUND }) {
  * for Android "maskable" icons, which may be cropped to a circle.
  */
 export function drawIcon(c, size, safe = false) {
+  const T = THEMES.purple // the icon always shows the original look
   c.save()
   c.scale(size / 100, size / 100)
   const sky = c.createLinearGradient(0, 0, 0, 100)
-  sky.addColorStop(0, SKY_TOP)
-  sky.addColorStop(0.35, SKY[1])
-  sky.addColorStop(0.72, SKY[2])
-  sky.addColorStop(1, SKY[3])
+  sky.addColorStop(0, T.skyTop)
+  sky.addColorStop(0.35, T.sky[1])
+  sky.addColorStop(0.72, T.sky[2])
+  sky.addColorStop(1, T.sky[3])
   c.fillStyle = sky
   c.fillRect(0, 0, 100, 100)
   const k = safe ? 0.78 : 1 // keep the subject inside the maskable safe zone
@@ -616,12 +776,12 @@ export function drawIcon(c, size, safe = false) {
   // sun and hills
   c.fillStyle = 'rgba(255, 214, 160, 0.95)'
   c.beginPath(); c.arc(72, 74, 17, 0, Math.PI * 2); c.fill()
-  c.fillStyle = HILL_FAR
+  c.fillStyle = T.hillFar
   c.beginPath()
   c.moveTo(-20, 120); c.lineTo(-20, 84)
   c.quadraticCurveTo(20, 68, 48, 86); c.quadraticCurveTo(80, 72, 120, 82)
   c.lineTo(120, 120); c.closePath(); c.fill()
-  c.fillStyle = HILL_NEAR
+  c.fillStyle = T.hillNear
   c.beginPath()
   c.moveTo(-20, 120); c.lineTo(-20, 96)
   c.quadraticCurveTo(30, 84, 62, 96); c.quadraticCurveTo(90, 88, 120, 94)

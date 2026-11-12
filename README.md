@@ -2,7 +2,7 @@
 
 A one-button browser game: flap a magpie through gaps between dusk-lit pillars.
 
-- **Controls:** Space / ↑ / W / click / tap to flap, P / Esc to pause, and M or the speaker button to mute. Pick Easy, Normal or Hard on the title screen. In Easy, grab the gold rings for extra lives (up to 3). Normal is the classic: one life, steady pillars. In Hard you get one life, the pillars drift, and updrafts carry you up.
+- **Controls:** Space / ↑ / W / click / tap to flap, P / Esc to pause, and M to mute. The gear (top right) opens the settings: sound on or off, and the theme, Purple (dusk) or Classic (a blue day sky, mossy sandstone pillars, a meadow and a yellow magpie). Pick Easy, Normal or Hard on the title screen. In Easy, grab the gold rings for extra lives (up to 3). Normal is the original game: one life, steady pillars. In Hard you get one life, the pillars drift, and updrafts carry you up.
 - **Medals:** bronze at 50 points, silver at 150, gold at 500. The sky turns from dusk to night as a run goes on.
 - **Run locally:** run `npm start`, then open http://localhost:8080.
 - **Tests:** `npm test`.
