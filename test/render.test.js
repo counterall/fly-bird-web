@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { MEDALS, W, createGame } from '../web/game.js?v=dev'
 import { SETTINGS, THEMES, cornerButton, THEME_NAMES, render, segmentAt, settingsAt } from '../web/render.js?v=dev'
+import { LANGS, STRINGS } from '../web/i18n.js?v=dev'
 
 function recordingContext() {
   const calls = { text: [], dash: [], arc: [], rects: [], fills: new Set(), stops: [] }
@@ -88,6 +89,9 @@ test('settings panel: sound and theme toggles, Done, and tapping outside', () =>
   assert.deepEqual(settingsAt(inside(sound, sound.w / 4)), { muted: true })
   assert.deepEqual(settingsAt(inside(theme, -theme.w / 4)), { theme: THEME_NAMES[0] })
   assert.deepEqual(settingsAt(inside(theme, theme.w / 4)), { theme: THEME_NAMES[1] })
+  const { lang } = SETTINGS
+  assert.deepEqual(settingsAt(inside(lang, -lang.w / 4)), { lang: 'en' })
+  assert.deepEqual(settingsAt(inside(lang, lang.w / 4)), { lang: 'zh' })
   assert.deepEqual(settingsAt(inside(done)), { close: true })
   assert.deepEqual(settingsAt({ x: 5, y: 5 }), { close: true }) // outside the panel
   assert.equal(settingsAt({ x: SETTINGS.x, y: SETTINGS.y - SETTINGS.h / 2 + 8 }), null) // the panel itself
@@ -95,7 +99,7 @@ test('settings panel: sound and theme toggles, Done, and tapping outside', () =>
 
 test('themes: purple (the original) first, then classic', () => {
   assert.deepEqual(THEME_NAMES, ['purple', 'classic'])
-  for (const name of THEME_NAMES) assert.ok(THEMES[name].label)
+  for (const l of LANGS) assert.deepEqual(Object.keys(STRINGS[l].themes), THEME_NAMES, `${l} names every theme`)
 })
 
 test('the corner button sits at the top right of the screen, not of the playfield', () => {
@@ -124,11 +128,11 @@ test('the settings panel shows sound and theme, with the current choices highlig
   for (const [muted, on] of [[false, 'On'], [true, 'Off']]) {
     for (const theme of THEME_NAMES) {
       const calls = frame({ settings: true, muted, theme })
-      for (const s of ['Settings', 'Sound', 'Theme', 'Done', 'On', 'Off', ...THEME_NAMES.map(n => THEMES[n].label)]) {
+      for (const s of ['Settings', 'Sound', 'Theme', 'Done', 'On', 'Off', ...THEME_NAMES.map(n => STRINGS.en.themes[n]), 'Language', 'English', '简体中文']) {
         assert.ok(at(calls, s), `draws ${s}`)
       }
       const chosen = new Set(calls.text.filter(t => ink(t.color) === ink(at(calls, on).color)).map(t => t.s))
-      assert.ok(chosen.has(on) && chosen.has(THEMES[theme].label), `${on} and ${theme} highlighted`)
+      assert.ok(chosen.has(on) && chosen.has(STRINGS.en.themes[theme]), `${on} and ${theme} highlighted`)
       assert.ok(!chosen.has(on === 'On' ? 'Off' : 'On'))
     }
   }
@@ -182,4 +186,69 @@ test('while a run is paused nothing is drawn in the corner', () => {
   assert.ok(at(paused, 'Paused'), 'the pause screen still shows')
   // defensive: if the settings were ever open during a paused run, the gear closes them
   assert.ok(disc(frame({ paused: true, settings: true }, 'playing')).length > 0)
+})
+
+test('the settings rows sit inside the panel, top to bottom, without overlapping', () => {
+  const rows = [SETTINGS.sound, SETTINGS.theme, SETTINGS.lang, SETTINGS.done]
+  const top = SETTINGS.y - SETTINGS.h / 2
+  const bottom = SETTINGS.y + SETTINGS.h / 2
+  assert.ok(rows[0].y - 32 - 10 > top + 40, 'below the title')
+  for (let i = 1; i < rows.length; i++) {
+    // each row's label sits 32 above it; leave room for it
+    assert.ok(rows[i].y - rows[i].h / 2 > rows[i - 1].y + rows[i - 1].h / 2 + 24, `row ${i} clear of row ${i - 1}`)
+  }
+  assert.ok(rows.at(-1).y + rows.at(-1).h / 2 < bottom - 8, 'Done inside the panel')
+  for (const r of rows) assert.ok(r.w / 2 < SETTINGS.w / 2 - 10, 'inside the sides')
+  // and above the ground, clear of the corner button
+  assert.ok(bottom < 500 && top > 70)
+})
+
+test('the language: Chinese strings replace the English ones', () => {
+  const zh = STRINGS.zh
+  const title = frame({ lang: 'zh' })
+  for (const s of [zh.clickToFly, zh.levels.easy, zh.levels.normal, zh.levels.hard, zh.blurb.normal]) assert.ok(at(title, s), s)
+  assert.equal(at(title, STRINGS.en.clickToFly), undefined)
+  assert.ok(at(title, 'UPDRAFT'), 'the name stays')
+  const panel = frame({ lang: 'zh', settings: true })
+  for (const s of [zh.settings, zh.sound, zh.on, zh.off, zh.theme, zh.themes.purple, zh.themes.classic, zh.language, zh.done]) assert.ok(at(panel, s), s)
+  // each language is listed under its own name, whatever the current one
+  assert.ok(at(panel, 'English') && at(panel, '简体中文'))
+  assert.ok(at(frame({ lang: 'zh', paused: true }, 'playing'), zh.paused))
+  assert.ok(at(frame({}), STRINGS.en.clickToFly), 'English by default')
+  assert.ok(at(frame({ lang: 'nope' }), STRINGS.en.clickToFly), 'unknown falls back to English')
+})
+
+test('the language toggle highlights the current language', () => {
+  for (const [lang, name] of [['en', 'English'], ['zh', '简体中文']]) {
+    const calls = frame({ settings: true, lang })
+    const other = name === 'English' ? '简体中文' : 'English'
+    assert.notEqual(at(calls, name).color.toLowerCase(), at(calls, other).color.toLowerCase())
+    assert.equal(at(calls, name).color.toLowerCase(), at(calls, STRINGS[lang].on).color.toLowerCase(), 'highlighted like the chosen sound option')
+  }
+})
+
+test('Grounded in Chinese', () => {
+  const g = createGame('normal')
+  Object.assign(g, { phase: 'over', score: MEDALS[0].score, overAt: 0, t: 5 })
+  const { c, calls } = recordingContext()
+  render(c, g, { best: 999, paused: false, touch: true, muted: false, lang: 'zh' })
+  const zh = STRINGS.zh
+  for (const s of [zh.grounded, zh.score, zh.levelBest(zh.levels.normal), zh.medals.bronze, zh.tapContinue]) assert.ok(at(calls, s), s)
+})
+
+test('the settings panel takes the colours of the chosen theme', () => {
+  const look = theme => {
+    const calls = frame({ settings: true, theme })
+    return { fills: calls.fills, title: at(calls, 'Settings').color.toLowerCase() }
+  }
+  for (const theme of THEME_NAMES) {
+    const t = THEMES[theme]
+    const { fills, title } = look(theme)
+    assert.ok(fills.has(t.panel.toLowerCase()), `${theme}: panel colour`)
+    assert.ok(fills.has(t.panelAccent.toLowerCase()), `${theme}: accent`)
+    assert.equal(title, t.panelAccent.toLowerCase(), `${theme}: title in the accent`)
+  }
+  assert.notEqual(THEMES.classic.panel, THEMES.purple.panel)
+  assert.notEqual(THEMES.classic.panelAccent, THEMES.purple.panelAccent)
+  assert.ok(!look('classic').fills.has(THEMES.purple.panel.toLowerCase()), 'no purple panel in classic')
 })

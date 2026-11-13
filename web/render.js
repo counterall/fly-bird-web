@@ -2,13 +2,14 @@
 // 2D context already scaled to the W×H logical playfield.
 import { CFG, GROUND, H, LEVEL, LEVELS, W, medalFor, nextMedal, trinketPos } from './game.js?v=dev'
 import { MAGPIE, paintMagpie } from './magpie.js?v=dev'
+import { LANGS, STRINGS } from './i18n.js?v=dev'
 
 // ── palette ────────────────────────────────────────────────────────────────
 // Each theme colours the same scene. The sky turns from dusk (or day) to night
-// over a run; the *Night colours are the far end.
+// over a run; the *Night colours are the far end. The panel* colours are the
+// settings panel's. A theme's name for the toggle is in i18n.js (`themes`).
 export const THEMES = Object.freeze({
   purple: {
-    label: 'Purple',
     sky: ['#2b2560', '#5b3f86', '#c4627a', '#f4a76a'],
     skyNight: ['#0e0c26', '#1b1946', '#2c2862', '#4a3a6e'],
     skyTop: '#1a1640', // top of the extra sky on tall screens
@@ -38,9 +39,16 @@ export const THEMES = Object.freeze({
     draft: [255, 214, 170],
     chevron: 'rgba(255, 236, 214, 0.55)',
     bird: MAGPIE,
+    // settings panel: deep plum with a peach-gold accent
+    panel: 'rgba(36, 27, 70, 0.96)', // nearly solid
+    panelTrack: 'rgba(30, 22, 60, 0.72)', // behind a toggle's options
+    panelAccent: '#ffd6a0', // title, chosen option, Done
+    panelAccentInk: '#2a1f4d', // text on the accent
+    panelLabel: 'rgba(255, 248, 238, 0.8)',
+    panelDim: 'rgba(20, 14, 40, 0.45)', // over the game behind the panel
+    panelOutline: 'rgba(30, 20, 60, 0.75)',
   },
   classic: {
-    label: 'Classic',
     sky: ['#3f97d6', '#62b2e6', '#93cfee', '#cfeaf3'],
     skyNight: ['#0b1734', '#13254b', '#1d365f', '#2c4a72'],
     skyTop: '#337fc0',
@@ -79,10 +87,19 @@ export const THEMES = Object.freeze({
       rim: 'rgba(255, 255, 255, 0.55)',
       cross: '#5a3a10',
     },
+    // settings panel: a deep day-sky blue with a sunny yellow accent
+    panel: 'rgba(28, 84, 138, 0.96)',
+    panelTrack: 'rgba(10, 42, 82, 0.55)',
+    panelAccent: '#ffe07a',
+    panelAccentInk: '#1b3a5c',
+    panelLabel: 'rgba(235, 247, 255, 0.85)',
+    panelDim: 'rgba(10, 32, 64, 0.4)',
+    panelOutline: 'rgba(8, 30, 60, 0.75)',
   },
 })
 export const THEME_NAMES = Object.freeze(Object.keys(THEMES))
 let T = THEMES.purple // the theme of the frame being drawn
+let S = STRINGS.en // and its language
 
 const MOON = '#f3ecdc'
 const STAR = '#fff4e6'
@@ -92,7 +109,6 @@ const INK_OUTLINE = 'rgba(30, 20, 60, 0.75)'
 const GOLD = '#ffd6a0'
 const CARD = 'rgba(30, 22, 60, 0.72)'
 const CARD_INK = '#2a1f4d' // dark text on a gold highlight
-const PANEL = 'rgba(36, 27, 70, 0.96)' // the settings panel: nearly solid
 const DIM = 'rgba(20, 14, 40, 0.45)'
 // Trinket: a gold ring set with a blue-green stone
 const RING = '#ffcf6b'
@@ -106,7 +122,8 @@ const MEDAL = {
   gold: ['#ffd66e', '#c48a1a'],
 }
 
-const FONT = 'ui-rounded, system-ui, -apple-system, "Segoe UI", sans-serif'
+// CJK faces after the Latin ones, for the Chinese strings
+const FONT = 'ui-rounded, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", sans-serif'
 const MAGPIE_SCALE = 1.3 // visual only; collisions use CFG.birdR
 const NIGHT_DIST = 45 * CFG.spacing // distance flown by full night: ~45 points
 const MEDAL_TOAST = 1.6 // s the "medal!" message shows after earning one
@@ -130,10 +147,11 @@ export function cornerButton(view, phase, paused, settings) {
 export const LEVEL_TOGGLE = { x: W / 2, y: 314, w: 270, h: 40 }
 /** The settings panel (centre and size) and the controls on it. */
 export const SETTINGS = Object.freeze({
-  x: W / 2, y: 300, w: 300, h: 260,
-  sound: { x: W / 2, y: 268, w: 200, h: 38 }, // On | Off
-  theme: { x: W / 2, y: 344, w: 240, h: 38 }, // one segment per theme
-  done: { x: W / 2, y: 398, w: 120, h: 36 },
+  x: W / 2, y: 300, w: 300, h: 344,
+  sound: { x: W / 2, y: 230, w: 200, h: 38 }, // On | Off
+  theme: { x: W / 2, y: 306, w: 240, h: 38 }, // one segment per theme
+  lang: { x: W / 2, y: 382, w: 260, h: 38 }, // one segment per language
+  done: { x: W / 2, y: 444, w: 120, h: 36 },
 })
 
 const within = (r, { x, y }) => Math.abs(x - r.x) <= r.w / 2 && Math.abs(y - r.y) <= r.h / 2
@@ -146,13 +164,15 @@ export function segmentAt(r, n, p) {
 
 /**
  * What a tap at p does while the settings are open: { muted }, { theme },
- * { close } (Done, or anywhere outside the panel), or null (the panel itself).
+ * { lang }, { close } (Done, or anywhere outside the panel), or null (the panel itself).
  */
 export function settingsAt(p) {
   const sound = segmentAt(SETTINGS.sound, 2, p)
   if (sound >= 0) return { muted: sound === 1 }
   const theme = segmentAt(SETTINGS.theme, THEME_NAMES.length, p)
   if (theme >= 0) return { theme: THEME_NAMES[theme] }
+  const lang = segmentAt(SETTINGS.lang, LANGS.length, p)
+  if (lang >= 0) return { lang: LANGS[lang] }
   if (within(SETTINGS.done, p) || !within(SETTINGS, p)) return { close: true }
   return null
 }
@@ -489,13 +509,13 @@ function drawMagpie(c, g) {
 }
 
 // ── overlays ───────────────────────────────────────────────────────────────
-function text(c, s, x, y, size, color = INK) {
+function text(c, s, x, y, size, color = INK, outline = INK_OUTLINE) {
   c.font = `800 ${size}px ${FONT}`
   c.textAlign = 'center'
   c.textBaseline = 'middle'
   c.lineWidth = Math.max(3, size / 7)
   c.lineJoin = 'round'
-  c.strokeStyle = INK_OUTLINE
+  c.strokeStyle = outline
   c.strokeText(s, x, y)
   c.fillStyle = color
   c.fillText(s, x, y)
@@ -508,8 +528,6 @@ function card(c, x, y, w, h) {
   c.roundRect(x, y, w, h, 16)
   c.fill()
 }
-
-const capital = s => s[0].toUpperCase() + s.slice(1)
 
 /** A medal of the given tier ('bronze' | 'silver' | 'gold'). */
 function drawMedal(c, x, y, r, tier) {
@@ -542,16 +560,19 @@ function drawMedal(c, x, y, r, tier) {
   c.restore()
 }
 
+/** The overlays' colours for a toggle; the settings panel uses its theme's. */
+const OVERLAY = { track: CARD, accent: GOLD, accentInk: CARD_INK }
+
 /** A pill toggle at r (centre and size): one equal segment per label, segment i highlighted. */
-function drawSegments(c, r, labels, i) {
+function drawSegments(c, r, labels, i, { track, accent, accentInk } = OVERLAY) {
   const { x, y, w, h } = r
   const seg = w / labels.length
   const left = x - w / 2
-  c.fillStyle = CARD
+  c.fillStyle = track
   c.beginPath()
   c.roundRect(left, y - h / 2, w, h, h / 2)
   c.fill()
-  c.fillStyle = GOLD
+  c.fillStyle = accent
   c.beginPath()
   c.roundRect(left + i * seg + 3, y - h / 2 + 3, seg - 6, h - 6, (h - 6) / 2)
   c.fill()
@@ -559,20 +580,14 @@ function drawSegments(c, r, labels, i) {
   c.textAlign = 'center'
   c.textBaseline = 'middle'
   labels.forEach((l, j) => {
-    c.fillStyle = j === i ? CARD_INK : INK
+    c.fillStyle = j === i ? accentInk : INK
     c.fillText(l, left + (j + 0.5) * seg, y + 1)
   })
 }
 
 /** "Easy | Normal | Hard" on the title screen. */
 function drawLevelToggle(c, level) {
-  drawSegments(c, LEVEL_TOGGLE, LEVELS.map(capital), LEVELS.indexOf(level))
-}
-
-const LEVEL_BLURB = {
-  easy: 'Grab shiny things for extra lives',
-  normal: 'One life. Steady pillars.',
-  hard: 'One life. Drifting pillars, updrafts.',
+  drawSegments(c, LEVEL_TOGGLE, LEVELS.map(l => S.levels[l]), LEVELS.indexOf(level))
 }
 
 /** One life icon: a feather, filled when it's a life you have. */
@@ -614,15 +629,15 @@ function drawLives(c, g) {
 
 function drawTitle(c, level, best, touch) {
   text(c, 'UPDRAFT', W / 2, 150, 46)
-  text(c, touch ? 'Tap to fly' : 'Click or press Space to fly', W / 2, 200, 17)
+  text(c, touch ? S.tapToFly : S.clickToFly, W / 2, 200, 17)
   if (best > 0) {
-    const w = text(c, `Best ${best}`, W / 2, 232, 17, GOLD)
+    const w = text(c, S.best(best), W / 2, 232, 17, GOLD)
     const medal = medalFor(best)
     if (medal) drawMedal(c, W / 2 - w / 2 - 16, 232, 9, medal.name)
   }
   drawLevelToggle(c, level)
-  text(c, LEVEL_BLURB[level], W / 2, 354, 14)
-  if (!touch) text(c, '← → level · P pause · M sound', W / 2, 382, 13, 'rgba(255, 248, 238, 0.7)')
+  text(c, S.blurb[level], W / 2, 354, 14)
+  if (!touch) text(c, S.keysHint, W / 2, 382, 13, 'rgba(255, 248, 238, 0.7)')
 }
 
 /** "Bronze medal!" under the score, just after a run earns a medal. */
@@ -631,8 +646,8 @@ function drawMedalToast(c, g) {
   if (!medal || medal.score !== g.score || g.t - g.scoredAt > MEDAL_TOAST) return
   const k = (g.t - g.scoredAt) / MEDAL_TOAST
   c.globalAlpha = k < 0.8 ? 1 : (1 - k) / 0.2
-  drawMedal(c, W / 2 - 78, 112, 11, medal.name)
-  text(c, `${capital(medal.name)} medal!`, W / 2 + 12, 112, 20, MEDAL[medal.name][0])
+  const w = text(c, S.medalToast(S.medals[medal.name]), W / 2 + 12, 112, 20, MEDAL[medal.name][0])
+  drawMedal(c, W / 2 + 12 - w / 2 - 16, 112, 11, medal.name) // just left of the text, in any language
   c.globalAlpha = 1
 }
 
@@ -643,21 +658,21 @@ function drawGameOver(c, g, best, touch) {
   const medal = medalFor(g.score)
   const next = nextMedal(g.score)
   card(c, W / 2 - 150, 166, 300, 222)
-  text(c, 'Grounded', W / 2, 204, 32, GOLD)
+  text(c, S.grounded, W / 2, 204, 32, GOLD)
   // with a medal: medal on the left, score and best on the right;
   // without one: score and best centred
   const mid = medal ? 255 : W / 2
   if (medal) {
     drawMedal(c, 115, 284, 30, medal.name)
-    text(c, capital(medal.name), 115, 332, 13, MEDAL[medal.name][0])
+    text(c, S.medals[medal.name], 115, 332, 13, MEDAL[medal.name][0])
   }
-  text(c, 'Score', mid - 40, 250, 15)
-  text(c, `${capital(g.level)} best`, mid + 40, 250, 15)
+  text(c, S.score, mid - 40, 250, 15)
+  text(c, S.levelBest(S.levels[g.level]), mid + 40, 250, 15)
   text(c, String(g.score), mid - 40, 286, 38)
   text(c, String(best), mid + 40, 286, 38, isBest ? GOLD : INK)
-  if (isBest) text(c, 'New best!', mid, 322, 15, GOLD)
-  else if (next) text(c, `${capital(next.name)} at ${next.score}`, mid, 322, 13, 'rgba(255, 248, 238, 0.7)')
-  if (since > CFG.restartDelay) text(c, touch ? 'Tap to continue' : 'Space to continue', W / 2, 364, 14)
+  if (isBest) text(c, S.newBest, mid, 322, 15, GOLD)
+  else if (next) text(c, S.nextMedal(S.medals[next.name], next.score), mid, 322, 13, 'rgba(255, 248, 238, 0.7)')
+  if (since > CFG.restartDelay) text(c, touch ? S.tapContinue : S.spaceContinue, W / 2, 364, 14)
 }
 
 /** The corner button, if any: two bars to pause, otherwise a gear. */
@@ -693,41 +708,47 @@ function drawCornerButton(c, button) {
   c.restore()
 }
 
-/** The settings panel: sound on / off, the theme, and Done. */
-function drawSettings(c, top, bottom, muted, themeName) {
-  c.fillStyle = DIM
+/** The settings panel, in the theme's colours: sound on / off, the theme, the language, and Done. */
+function drawSettings(c, top, bottom, muted, themeName, langName) {
+  c.fillStyle = T.panelDim
   c.fillRect(0, -top, W, bottom + top)
-  const { x, y, w, h, sound, theme, done } = SETTINGS
-  c.fillStyle = PANEL
+  const { x, y, w, h, sound, theme, lang, done } = SETTINGS
+  c.fillStyle = T.panel
   c.beginPath()
   c.roundRect(x - w / 2, y - h / 2, w, h, 16)
   c.fill()
-  text(c, 'Settings', x, y - h / 2 + 26, 26, GOLD)
-  text(c, 'Sound', x, sound.y - 32, 14, 'rgba(255, 248, 238, 0.8)')
-  drawSegments(c, sound, ['On', 'Off'], muted ? 1 : 0)
-  text(c, 'Theme', x, theme.y - 32, 14, 'rgba(255, 248, 238, 0.8)')
-  drawSegments(c, theme, THEME_NAMES.map(n => THEMES[n].label), THEME_NAMES.indexOf(themeName))
-  c.fillStyle = GOLD
+  const colors = { track: T.panelTrack, accent: T.panelAccent, accentInk: T.panelAccentInk }
+  const label = (s, row) => text(c, s, x, row.y - 32, 14, T.panelLabel, T.panelOutline)
+  text(c, S.settings, x, y - h / 2 + 26, 26, T.panelAccent, T.panelOutline)
+  label(S.sound, sound)
+  drawSegments(c, sound, [S.on, S.off], muted ? 1 : 0, colors)
+  label(S.theme, theme)
+  drawSegments(c, theme, THEME_NAMES.map(n => S.themes[n]), THEME_NAMES.indexOf(themeName), colors)
+  label(S.language, lang)
+  // each language under its own name
+  drawSegments(c, lang, LANGS.map(l => STRINGS[l].langName), LANGS.indexOf(langName), colors)
+  c.fillStyle = T.panelAccent
   c.beginPath()
   c.roundRect(done.x - done.w / 2, done.y - done.h / 2, done.w, done.h, done.h / 2)
   c.fill()
   c.font = `800 16px ${FONT}`
   c.textAlign = 'center'
   c.textBaseline = 'middle'
-  c.fillStyle = CARD_INK
-  c.fillText('Done', done.x, done.y + 1)
+  c.fillStyle = T.panelAccentInk
+  c.fillText(S.done, done.x, done.y + 1)
 }
 
 function drawPaused(c, top, bottom, touch) {
   c.fillStyle = DIM
   c.fillRect(0, -top, W, bottom + top)
-  text(c, 'Paused', W / 2, H / 2 - 16, 40)
-  text(c, touch ? 'Tap to resume' : 'P or click to resume', W / 2, H / 2 + 22, 16)
+  text(c, S.paused, W / 2, H / 2 - 16, 40)
+  text(c, touch ? S.tapResume : S.clickResume, W / 2, H / 2 + 22, 16)
 }
 
 /**
- * Draw one frame. `ui` is { best, paused, touch, muted, settings, theme }:
- * `settings` shows the settings panel, `theme` is a THEMES key (default purple). `view.top` /
+ * Draw one frame. `ui` is { best, paused, touch, muted, settings, theme, lang }:
+ * `settings` shows the settings panel, `theme` is a THEMES key (default purple),
+ * `lang` a STRINGS key (default English). `view.top` /
  * `view.bottom` are extra logical pixels shown above y = 0 and below y = H on
  * screens taller than 2:3 (phones), and `view.ground` is the ground line
  * there. The playfield itself is unchanged; the sky and ground just extend.
@@ -736,6 +757,8 @@ export function render(c, g, ui, view = { top: 0, bottom: 0, ground: GROUND }) {
   const { best, paused, touch, muted, settings } = ui
   const themeName = Object.hasOwn(THEMES, ui.theme ?? '') ? ui.theme : 'purple'
   T = THEMES[themeName]
+  const langName = Object.hasOwn(STRINGS, ui.lang ?? '') ? ui.lang : 'en'
+  S = STRINGS[langName]
   const top = view.top
   const bottom = H + view.bottom
   const ground = view.ground
@@ -755,7 +778,7 @@ export function render(c, g, ui, view = { top: 0, bottom: 0, ground: GROUND }) {
   drawMagpie(c, g)
 
   // the settings panel replaces the title, score and pause screens while open
-  if (settings) drawSettings(c, top, bottom, muted, themeName)
+  if (settings) drawSettings(c, top, bottom, muted, themeName, langName)
   else {
     if (g.phase === 'playing') {
       text(c, String(g.score), W / 2, 64, 52)
