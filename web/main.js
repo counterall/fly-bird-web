@@ -2,12 +2,14 @@
 import { GROUND, H, LEVELS, W, createGame, flap, medalFor, step } from './game.js?v=dev'
 import { LEVEL_TOGGLE, THEME_NAMES, cornerButton, render, segmentAt, settingsAt } from './render.js?v=dev'
 import { createSound } from './sound.js?v=dev'
+import { LANGS, STRINGS, defaultLang } from './i18n.js?v=dev'
 
 const LS_BEST = level => `updraft:best:${level}`
 const LS_BEST_OLD = 'updraft:best' // before levels: the game that is now normal
 const LS_LEVEL = 'updraft:level'
 const LS_MUTED = 'updraft:muted'
 const LS_THEME = 'updraft:theme'
+const LS_LANG = 'updraft:lang'
 
 // localStorage can be unavailable (private mode, blocked site data).
 function load(key) {
@@ -28,6 +30,14 @@ const bests = Object.fromEntries(LEVELS.map(l => [l, Number.parseInt(load(LS_BES
 let g = createGame(LEVELS.includes(load(LS_LEVEL)) ? load(LS_LEVEL) : 'easy')
 const sound = createSound(load(LS_MUTED) === '1')
 let theme = THEME_NAMES.includes(load(LS_THEME)) ? load(LS_THEME) : THEME_NAMES[0]
+// until one is chosen in the settings, the language follows the browser's
+let lang = LANGS.includes(load(LS_LANG)) ? load(LS_LANG) : defaultLang(navigator.languages?.length ? navigator.languages : [navigator.language])
+/** Tell screen readers (and font fallback) the page's language. */
+function showLang(l) {
+  document.documentElement.lang = l === 'zh' ? 'zh-Hans' : l
+  canvas.setAttribute('aria-label', STRINGS[l].canvasLabel)
+}
+showLang(lang)
 let paused = false
 let settings = false // the settings panel is open
 let touch = matchMedia('(pointer: coarse)').matches
@@ -57,6 +67,12 @@ function setMuted(muted) {
 function chooseTheme(name) {
   theme = name
   store(LS_THEME, name)
+}
+
+function chooseLang(l) {
+  lang = l
+  showLang(l)
+  store(LS_LANG, l)
 }
 
 /** Open the settings; a run in progress pauses underneath. */
@@ -159,7 +175,7 @@ function frame(now) {
   const sx = pw / W
   const sy = ph / (H + view.top + view.bottom)
   c.setTransform(sx, 0, 0, sy, 0, view.top * sy)
-  render(c, g, { best: bests[g.level], paused, touch, muted: sound.muted, settings, theme }, view)
+  render(c, g, { best: bests[g.level], paused, touch, muted: sound.muted, settings, theme, lang }, view)
   requestAnimationFrame(frame)
 }
 requestAnimationFrame(frame)
@@ -216,6 +232,7 @@ addEventListener('pointerdown', e => {
     if (hit?.close) closeSettings()
     else if (hit && 'muted' in hit) setMuted(hit.muted)
     else if (hit?.theme) chooseTheme(hit.theme)
+    else if (hit?.lang) chooseLang(hit.lang)
     return
   }
   const level = levelAt(p)
